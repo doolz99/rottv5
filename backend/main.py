@@ -61,7 +61,29 @@ async def broadcast_tag_canvas(tag: str, payload: Dict):
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FRONTEND_DIR = os.path.join(BASE_DIR, 'frontend')
 
+
 app = FastAPI()
+
+# --- Periodic Cleanup Task for Stale Users/Sessions ---
+STALE_WS_TIMEOUT = 60  # seconds
+async def cleanup_stale_users():
+    while True:
+        await asyncio.sleep(60)
+        stale = []
+        for uid, ws in list(user_ws.items()):
+            # If the websocket is closed or dead, mark for removal
+            if ws.client_state.name != 'CONNECTED':
+                stale.append(uid)
+        for uid in stale:
+            await disconnect_user(uid, notify_partner=True)
+        # Clean up tag canvases with no participants
+        for tag in list(tag_canvases.keys()):
+            prune_tag_canvas_if_idle(tag)
+        await broadcast_population()
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(cleanup_stale_users())
 
 app.add_middleware(
     CORSMiddleware,
@@ -101,8 +123,8 @@ async def broadcast_tag_counts():
             pass
 
 async def broadcast_population():
-    # Total connected websocket users
-    total = len(user_ws)
+    # Only count users with a live websocket connection
+    total = sum(1 for ws in user_ws.values() if ws.client_state.name == 'CONNECTED')
     if not user_ws:
         return
     payload = {"type":"population", "count": total}
