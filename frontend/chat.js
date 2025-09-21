@@ -13,6 +13,9 @@ const inlineCaret = document.getElementById('inlineCaret');
 const clickArea = document.getElementById('clickArea');
 const overlayInput = document.getElementById('overlayInput'); // hidden focus sink
 const caret = document.getElementById('caret');
+const mobileInputForm = document.getElementById('mobileInputForm');
+const mobileInput = document.getElementById('mobileInput');
+const mobileSendBtn = document.getElementById('mobileSendBtn');
 const statusBar = document.getElementById('statusBar');
 let skipBtn = document.getElementById('skipBtn');
 let searchBtnGlobal = null; // reference after binding
@@ -138,6 +141,26 @@ let remoteCurrentMode = null;
 let lastTypingSent = 0;
 let focusActive = false;
 let draftBuffer = '';
+
+// --- Mobile input helpers ---
+function isMobileDevice() {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
+function showMobileInput() {
+  if (mobileInputForm) mobileInputForm.style.display = '';
+  if (mobileInput) mobileInput.focus();
+}
+function hideMobileInput() {
+  if (mobileInputForm) mobileInputForm.style.display = 'none';
+}
+
+if (isMobileDevice()) {
+  showMobileInput();
+  // Hide overlayInput and clickArea for mobile
+  if (overlayInput) overlayInput.style.display = 'none';
+  if (clickArea) clickArea.style.display = 'none';
+}
 let tagCounts = {}; // updated from server
 // Scroll feature removed; maintaining original centered behavior.
 
@@ -427,45 +450,71 @@ window.addEventListener('resize', ()=>{
   adjustCentering();
 });
 
-clickArea.addEventListener('click', focusInput);
-overlayInput.addEventListener('focus', ()=>{ inlineCaret.classList.remove('hidden'); focusActive=true; });
-overlayInput.addEventListener('blur', ()=>{ inlineCaret.classList.add('hidden'); focusActive=false; });
-function focusInput(){ overlayInput.focus(); focusActive=true; inlineCaret.classList.remove('hidden'); }
+
+if (!isMobileDevice()) {
+  clickArea.addEventListener('click', focusInput);
+  overlayInput.addEventListener('focus', ()=>{ inlineCaret.classList.remove('hidden'); focusActive=true; });
+  overlayInput.addEventListener('blur', ()=>{ inlineCaret.classList.add('hidden'); focusActive=false; });
+  function focusInput(){ overlayInput.focus(); focusActive=true; inlineCaret.classList.remove('hidden'); }
+}
 
 function positionCaret(){
   // simple bottom-left caret; could extend to follow text length if we wanted pre-submit editing visible
 }
 
-document.addEventListener('keydown', (e)=>{
-  if(!focusActive) return;
-  if(e.key==='Escape'){
-    e.preventDefault();
-    // Use skip behavior instead of leave
-    if(ws && ws.readyState===1){ ws.send(JSON.stringify({type:'skip'})); setStatus('skipping...'); typingGhostEl.textContent=''; }
-    return;
-  }
-  if(e.key==='Enter' && !e.shiftKey){
-    e.preventDefault();
-    sendMessage();
-    return;
-  }
-  if(e.key==='Backspace'){
-    draftBuffer = draftBuffer.slice(0,-1);
-  } else if(e.key==='Tab'){
-    e.preventDefault();
-  } else if(e.key.length === 1){
-    draftBuffer += e.key;
-  }
-  updateDraft();
-});
 
-document.addEventListener('paste', (e)=>{
-  if(!focusActive) return;
-  e.preventDefault();
-  const text = (e.clipboardData || window.clipboardData).getData('text');
-  draftBuffer += text;
-  updateDraft();
-});
+if (!isMobileDevice()) {
+  document.addEventListener('keydown', (e)=>{
+    if(!focusActive) return;
+    if(e.key==='Escape'){
+      e.preventDefault();
+      // Use skip behavior instead of leave
+      if(ws && ws.readyState===1){ ws.send(JSON.stringify({type:'skip'})); setStatus('skipping...'); typingGhostEl.textContent=''; }
+      return;
+    }
+    if(e.key==='Enter' && !e.shiftKey){
+      e.preventDefault();
+      sendMessage();
+      return;
+    }
+    if(e.key==='Backspace'){
+      draftBuffer = draftBuffer.slice(0,-1);
+    } else if(e.key==='Tab'){
+      e.preventDefault();
+    } else if(e.key.length === 1){
+      draftBuffer += e.key;
+    }
+    updateDraft();
+  });
+
+  document.addEventListener('paste', (e)=>{
+    if(!focusActive) return;
+    e.preventDefault();
+    const text = (e.clipboardData || window.clipboardData).getData('text');
+    draftBuffer += text;
+    updateDraft();
+  });
+}
+
+// --- Mobile send button and textarea ---
+if (isMobileDevice() && mobileInputForm && mobileInput) {
+  mobileInputForm.addEventListener('submit', function(e) {
+    e.preventDefault();
+    const text = mobileInput.value.trim();
+    if (!text) return;
+    ws && ws.readyState===1 && chatId && ws.send(JSON.stringify({type:'message', text}));
+    addMessage(text, false);
+    SOUND.messageSelf();
+    mobileInput.value = '';
+    typingGhostEl.textContent='';
+    typingGhostEl.classList.remove('partner');
+    updateDraft();
+  });
+  mobileInput.addEventListener('input', function() {
+  ws && ws.readyState===1 && chatId && ws.send(JSON.stringify({type:'typing', preview: mobileInput.value}));
+    updateDraft();
+  });
+}
 
 function updateDraft(){
   // Use a zero-width space when empty so element has measurable height for centering

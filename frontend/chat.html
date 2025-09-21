@@ -10,7 +10,18 @@
 	<div class="gc-bubble"><span id="gcText"></span><span class="gc-caret"></span></div>
 	<button id="gcClose" class="gc-close" aria-label="close guide">×</button>
 </div>
-<div id="statusBar"></div><div id="messages" class="messages"></div><div id="selfDraft" class="self-draft"><span id="draftText"></span><span id="inlineCaret" class="inline-caret hidden">|</span></div><div id="typingGhost" class="typing-ghost"></div><div id="clickArea" class="click-area" tabindex="0" aria-label="click to type"></div><div id="overlayInput" contenteditable="true" class="overlay-input" spellcheck="false" aria-hidden="true"></div>
+<div id="statusBar"></div>
+<div id="messages" class="messages"></div>
+<div id="selfDraft" class="self-draft"><span id="draftText"></span><span id="inlineCaret" class="inline-caret hidden">|</span></div>
+<div id="typingGhost" class="typing-ghost"></div>
+<div id="clickArea" class="click-area" tabindex="0" aria-label="click to type"></div>
+<div id="overlayInput" contenteditable="true" class="overlay-input" spellcheck="false" aria-hidden="true"></div>
+
+<!-- Mobile-friendly message input -->
+<form id="mobileInputForm" class="mobile-input-form" autocomplete="off" style="display:none;">
+	<textarea id="mobileInput" class="mobile-input" rows="1" placeholder="Type a message..."></textarea>
+	<button type="submit" id="mobileSendBtn" class="mobile-send-btn">Send</button>
+</form>
 
 <!-- Remote toggle button (bottom drawer) -->
 <button id="remoteToggle" class="remote-toggle bottom" aria-expanded="false" aria-controls="remotePanel" title="open remote">remote</button>
