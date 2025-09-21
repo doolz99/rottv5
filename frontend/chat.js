@@ -1,3 +1,51 @@
+// --- Mobile block overlay logic ---
+function isMobileDevice() {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
+
+function showMobileBlockOverlay() {
+  var overlay = document.getElementById('mobileBlockOverlay');
+  if (!overlay) return;
+  overlay.style.display = 'flex';
+  overlay.innerHTML = 'PHONE POSTERS FUCK OFF';
+  // TTS
+  if ('speechSynthesis' in window) {
+    try {
+      var utter = new window.SpeechSynthesisUtterance('PHONE POSTERS FUCK OFF');
+      utter.rate = 1.0;
+      utter.pitch = 1.0;
+      utter.volume = 1.0;
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utter);
+    } catch(e) {}
+  }
+  // Repeating beep alarm
+  function playBeep() {
+    try {
+      var ctx = new (window.AudioContext || window.webkitAudioContext)();
+      var o = ctx.createOscillator();
+      var g = ctx.createGain();
+      o.type = 'sine';
+      o.frequency.value = 880;
+      g.gain.value = 0.25;
+      o.connect(g).connect(ctx.destination);
+      o.start();
+      setTimeout(function(){ o.stop(); ctx.close(); }, 180);
+    } catch(e) {}
+  }
+  var beepInterval = setInterval(playBeep, 400);
+  // Stop beeping if overlay is hidden (defensive)
+  overlay.addEventListener('transitionend', function() {
+    if (overlay.style.display === 'none') clearInterval(beepInterval);
+  });
+}
+
+if (isMobileDevice()) {
+  showMobileBlockOverlay();
+  // Optionally, stop further JS execution for chat
+  throw new Error('Blocked on mobile');
+}
 const wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
 let ws;
 let userId=null; let chatId=null;
