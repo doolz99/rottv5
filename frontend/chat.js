@@ -248,6 +248,10 @@ function addMessage(text, partner=false){
   messagesEl.appendChild(div);
   scheduleEveryThirdFade();
   adjustCentering();
+  // On mobile, scroll to bottom so new message is visible above keyboard
+  if (window.innerWidth <= 600) {
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
 }
 function addSystemMessage(text, options = {}){
   const div = document.createElement('div');
