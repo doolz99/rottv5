@@ -1,57 +1,58 @@
 /* --- Mobile-specific remote and chat layout --- */
 @media (max-width: 600px) {
 	.remote-toggle {
-		left: auto;
-		right: 1.2rem;
-		bottom: 1.2rem;
-		transform: none;
-		border-radius: 50%;
-		padding: 1.1rem 1.1rem;
-		font-size: 15px;
-		z-index: 210;
-		box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+		left: auto !important;
+		right: 1.2rem !important;
+		bottom: 1.2rem !important;
+		top: auto !important;
+		transform: none !important;
+		border-radius: 50% !important;
+		padding: 1.1rem 1.1rem !important;
+		font-size: 15px !important;
+		z-index: 210 !important;
+		box-shadow: 0 2px 12px rgba(0,0,0,0.18) !important;
+		background: #111 !important;
 	}
 	.remote-panel {
-		left: auto;
-		right: 0;
-		bottom: 0;
-		top: 0;
-		width: 90vw;
-		max-width: 98vw;
-		height: 100vh;
-		max-height: 100vh;
-		border-radius: 18px 0 0 18px;
-		border-bottom: none;
-		border-right: none;
-		transform: translateX(105%);
-		transition: transform .55s cubic-bezier(.68,.1,.24,1);
-		box-shadow: -2px 0 18px rgba(0,0,0,0.18);
-		z-index: 205;
-		padding-bottom: 2.5rem;
+		left: auto !important;
+		right: 0 !important;
+		top: 0 !important;
+		bottom: 0 !important;
+		width: 90vw !important;
+		max-width: 98vw !important;
+		height: 100vh !important;
+		max-height: 100vh !important;
+		border-radius: 18px 0 0 18px !important;
+		border-bottom: none !important;
+		border-right: none !important;
+		transform: translateX(105%) !important;
+		transition: transform .55s cubic-bezier(.68,.1,.24,1) !important;
+		box-shadow: -2px 0 18px rgba(0,0,0,0.18) !important;
+		z-index: 205 !important;
+		padding-bottom: 2.5rem !important;
+		flex-direction: column !important;
+		align-items: stretch !important;
+		padding: 1.1rem 0.7rem 2.2rem 0.7rem !important;
+		display: flex !important;
 	}
 	.remote-panel.open {
-		transform: translateX(0);
-	}
-	.remote-panel {
-		flex-direction: column;
-		align-items: stretch;
-		padding: 1.1rem 0.7rem 2.2rem 0.7rem;
+		transform: translateX(0) !important;
 	}
 	/* Messages area anchored to bottom third */
 	.messages {
-		position: fixed;
-		left: 50%;
-		bottom: 34vh;
-		transform: translateX(-50%);
-		width: 98vw;
-		max-width: 98vw;
-		max-height: 32vh;
-		min-height: 8vh;
-		overflow-y: auto;
-		z-index: 100;
-		background: rgba(0,0,0,0.01);
-		border-radius: 10px;
-		padding-bottom: 0.5rem;
+		position: fixed !important;
+		left: 50% !important;
+		bottom: 34vh !important;
+		transform: translateX(-50%) !important;
+		width: 98vw !important;
+		max-width: 98vw !important;
+		max-height: 32vh !important;
+		min-height: 8vh !important;
+		overflow-y: auto !important;
+		z-index: 100 !important;
+		background: rgba(0,0,0,0.01) !important;
+		border-radius: 10px !important;
+		padding-bottom: 0.5rem !important;
 	}
 }
 /* Mobile input styles */
@@ -81,8 +82,9 @@
 }
 
 @media (max-width: 600px) {
-	.mobile-input {
-		border: none;
+	form.mobile-input-form .mobile-input {
+		border: none !important;
+		box-shadow: none !important;
 	}
 }
 .mobile-send-btn {
