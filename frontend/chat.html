@@ -1,0 +1,54 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><title>rot.tv5 - chat</title><meta name="viewport" content="width=device-width,initial-scale=1"/><link rel="stylesheet" href="/static/styles.css"/></head><body class="chat-body">
+<div class="frame-edge frame-top"></div>
+<div class="frame-edge frame-bottom"></div>
+<div class="frame-edge frame-left"></div>
+<div class="frame-edge frame-right"></div>
+<div id="populationCounter" class="population-counter" aria-live="polite" title="people online">--</div>
+<!-- Slide-out guide character -->
+<div id="guideCharacter" class="guide-character" aria-live="polite" aria-atomic="true">
+	<div class="gc-avatar" role="img" aria-label="guide"></div>
+	<div class="gc-bubble"><span id="gcText"></span><span class="gc-caret"></span></div>
+	<button id="gcClose" class="gc-close" aria-label="close guide">×</button>
+</div>
+<div id="statusBar"></div><div id="messages" class="messages"></div><div id="selfDraft" class="self-draft"><span id="draftText"></span><span id="inlineCaret" class="inline-caret hidden">|</span></div><div id="typingGhost" class="typing-ghost"></div><div id="clickArea" class="click-area" tabindex="0" aria-label="click to type"></div><div id="overlayInput" contenteditable="true" class="overlay-input" spellcheck="false" aria-hidden="true"></div>
+
+<!-- Remote toggle button (bottom drawer) -->
+<button id="remoteToggle" class="remote-toggle bottom" aria-expanded="false" aria-controls="remotePanel" title="open remote">remote</button>
+
+<!-- Sliding TV remote panel -->
+<div id="remotePanel" class="remote-panel" aria-hidden="true">
+	<div class="remote-header">tv remote</div>
+	<div class="remote-section">
+		<button id="searchBtn" class="remote-action primary">search</button>
+		<button id="skipBtn" class="remote-action" disabled>skip</button>
+		<button id="disconnectBtn" class="remote-action danger" disabled>disconnect</button>
+	</div>
+	<div class="remote-subhead">tune</div>
+	<div class="remote-tune">
+		<input id="remoteTagInput" class="remote-tag-input" placeholder="tags (comma separated)" />
+		<div id="remoteTagsDisplay" class="remote-tags-display"></div>
+		<div class="remote-tune-buttons">
+			<button id="remoteRandomBtn" class="remote-mini">random</button>
+			<button id="remoteTagsBtn" class="remote-mini" disabled>match</button>
+		</div>
+	</div>
+	<div class="remote-hint">controls migrated</div>
+</div>
+<!-- Tag Canvas Overlay -->
+<div id="tagCanvasOverlay" class="tag-canvas-overlay" aria-hidden="true" data-active="false">
+	<div class="tco-toolbar">
+		<span class="tco-tag-label" id="tcoTagLabel"></span>
+		<button id="tcoClose" class="tco-btn" title="close (Esc)">close</button>
+		<div class="tco-tools">
+			<button id="tcoToolDraw" class="tco-btn tool active" data-tool="draw" title="draw">draw</button>
+			<button id="tcoToolErase" class="tco-btn tool" data-tool="erase" title="erase (stroke)">erase</button>
+			<input id="tcoColor" type="color" value="#ffffff" class="tco-color" title="color" />
+			<input id="tcoWidth" type="range" min="1" max="12" value="3" class="tco-width" title="stroke width" />
+		</div>
+		<span class="tco-participants" id="tcoParticipants" title="participants">--</span>
+	</div>
+	<div class="tco-stage">
+		<canvas id="tcoCanvas" class="tco-canvas"></canvas>
+	</div>
+</div>
+<script src="/static/chat.js"></script></body></html>
