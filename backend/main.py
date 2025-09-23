@@ -278,63 +278,46 @@ async def leave_queue(user_id: str):
             break
 
 async def disconnect_user(user_id: str, notify_partner: bool = True):
-    # Add a grace period for reconnects
-    import asyncio
-    await asyncio.sleep(2)  # 2 second grace period
-    # Only remove if not reconnected
-    if user_id not in user_ws or not user_ws[user_id].client_state.name == 'CONNECTED':
-        await leave_queue(user_id)
-        for tag, canvas in list(tag_canvases.items()):
-            if user_id in canvas.participants:
-                canvas.participants.discard(user_id)
-                canvas.last_updated = time.time()
-                try:
-                    await broadcast_tag_canvas(tag, {"type":"tag_canvas_participants","tag":tag,"count":len(canvas.participants)})
-                except Exception:
-                    pass
-                prune_tag_canvas_if_idle(tag)
-        chat_id = user_chat.get(user_id)
-        if chat_id:
-            chat = active_chats.get(chat_id)
-            if chat:
-                partner = chat['a'] if chat['b'] == user_id else chat['b']
-                if notify_partner:
-                    pws = user_ws.get(partner)
-                    if pws:
-                        await pws.send_json({"type": "partner_disconnected"})
-                user_chat[partner] = None
-            active_chats.pop(chat_id, None)
-        user_chat[user_id] = None
-        user_ws.pop(user_id, None)
-        user_mode.pop(user_id, None)
-        user_tags.pop(user_id, None)
-        # Always broadcast after a disconnect
-        await broadcast_available_users()
-        await broadcast_population()
-
-from urllib.parse import parse_qs
+    # Remove from queues
+    await leave_queue(user_id)
+    # Remove from tag canvas participants
+    for tag, canvas in list(tag_canvases.items()):
+        if user_id in canvas.participants:
+            canvas.participants.discard(user_id)
+            canvas.last_updated = time.time()
+            # Fire-and-forget participant update
+            try:
+                await broadcast_tag_canvas(tag, {"type":"tag_canvas_participants","tag":tag,"count":len(canvas.participants)})
+            except Exception:
+                pass
+            prune_tag_canvas_if_idle(tag)
+    # If in chat
+    chat_id = user_chat.get(user_id)
+    if chat_id:
+        chat = active_chats.get(chat_id)
+        if chat:
+            partner = chat['a'] if chat['b'] == user_id else chat['b']
+            if notify_partner:
+                pws = user_ws.get(partner)
+                if pws:
+                    await pws.send_json({"type": "partner_disconnected"})
+            # cleanup partner chat ref (they can choose to requeue client side)
+            user_chat[partner] = None
+        active_chats.pop(chat_id, None)
+    user_chat[user_id] = None
+    # remove ws mapping (do not close here, caller handles exceptions)
+    user_ws.pop(user_id, None)
+    user_mode.pop(user_id, None)
+    user_tags.pop(user_id, None)
 
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
-    # Try to get userId from query params
-    user_id = None
-    try:
-        query = ws.scope.get('query_string', b'').decode()
-        params = parse_qs(query)
-        user_id_param = params.get('userId', [None])[0]
-        if user_id_param and user_id_param in user_chat:
-            user_id = user_id_param
-    except Exception:
-        pass
-    if not user_id:
-        user_id = str(uuid.uuid4())
-    # Always replace the old WebSocket mapping for this user_id
+    user_id = str(uuid.uuid4())
     user_ws[user_id] = ws
-    if user_id not in user_chat:
-        user_chat[user_id] = None
+    user_chat[user_id] = None
     await ws.send_json({"type": "welcome", "userId": user_id})
-    # Immediately broadcast new population and available users after updating mapping
+    # Immediately broadcast new population
     await broadcast_population()
     await broadcast_available_users()
     try:

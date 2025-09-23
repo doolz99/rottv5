@@ -170,18 +170,9 @@ if (isMobileDevice()) {
   // Optionally, stop further JS execution for chat
   throw new Error('Blocked on mobile');
 }
-// Persistent userId storage
-let userId = localStorage.getItem('rottv5_userId') || null;
-let chatId = null;
+const wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
 let ws;
-function getWsUrl() {
-  let url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
-  if (userId) {
-    url += '?userId=' + encodeURIComponent(userId);
-  }
-  return url;
-}
-// ...existing code...
+let userId=null; let chatId=null;
 let mode = sessionStorage.getItem('mode')||'random';
 let tags = [];
 try{ if(mode==='tags'){ tags = JSON.parse(sessionStorage.getItem('tags')||'[]'); } }catch(e){}
@@ -347,30 +338,24 @@ let tagCounts = {}; // updated from server
 
 function connect(){
   if(ws && (ws.readyState===0 || ws.readyState===1)) return; // already connecting/connected
-  ws = new WebSocket(getWsUrl());
+  ws = new WebSocket(wsUrl);
   ws.onopen = ()=>{
     setStatus('idle');
   };
   ws.onmessage = (ev)=>{
     const data = JSON.parse(ev.data);
     if (data.type === 'available_users') {
-      console.log('[WS] available_users', data.users);
       showUserIndicators(data.users || []);
       // If not paired, keep polling
       handlePairingState();
+      // Also update population count based on available users length (fallback)
+      if (populationCounter) {
+        populationCounter.textContent = String((data.users || []).length + 1); // +1 for self
+      }
       return;
     }
-    if (data.type === 'population') {
-      console.log('[WS] population', data.count);
-      if (typeof populationCounter !== 'undefined' && populationCounter) {
-        populationCounter.textContent = String(data.count);
-      }
-    }
     switch(data.type){
-      case 'welcome':
-        userId = data.userId;
-        if (userId) localStorage.setItem('rottv5_userId', userId);
-        break;
+      case 'welcome': userId=data.userId; break;
       case 'queue_status': {
         const st = data.status;
         if(st === 'waiting'){
@@ -420,7 +405,7 @@ function connect(){
           populationCounter.classList.add('flash');
           spawnPopulationSparks(data.count);
           lastPopulation = data.count;
-          SOUND.population();
+          if (typeof SOUND !== 'undefined' && SOUND.population) SOUND.population();
         }
         break;
       default:
