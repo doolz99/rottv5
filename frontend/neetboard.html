@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>neet board</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { background: #000; margin: 0; width: 100vw; height: 100vh; }
+  </style>
+</head>
+<body>
+  <canvas id="boardCanvas" width="8000" height="8000" style="background:#181818;position:absolute;left:0;top:0;cursor:auto;"></canvas>
+  <div id="onlineCounter" style="position:fixed;top:16px;right:32px;color:#fff;font-family:sans-serif;font-size:20px;z-index:10;text-shadow:0 2px 8px #000,0 0 2px #00e5ff;pointer-events:none;">Online: 1</div>
+  <script>
+  // Assign a color to each userId (deterministic hash to HSL)
+  function colorForUser(id) {
+    if (!id) return '#888';
+    let hash = 0;
+    for (let i = 0; i < id.length; ++i) hash = ((hash << 5) - hash) + id.charCodeAt(i);
+    let hue = Math.abs(hash) % 360;
+    return `hsl(${hue}, 70%, 60%)`;
+  }
+  // Assign a unique user ID to this client (persisted in localStorage)
+  let userId = localStorage.getItem('neetboard_userid');
+  if (!userId) {
+    userId = 'u_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    localStorage.setItem('neetboard_userid', userId);
+  }
+  // Multiplayer: connect to backend WebSocket
+  let ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/neetboard');
+  let onlineCount = 1;
+  function updateOnlineCounter() {
+    document.getElementById('onlineCounter').textContent = 'Online: ' + onlineCount;
+  }
+  ws.onmessage = (event) => {
+    let msg = JSON.parse(event.data);
+    if (msg.type === 'online') {
+      onlineCount = msg.online;
+      updateOnlineCounter();
+      return;
+    }
+    if (msg.type === 'init' || msg.type === 'update') {
+      if (typeof msg.online === 'number') {
+        onlineCount = msg.online;
+        updateOnlineCounter();
+      }
+      // Detect new replies to your boxes and play a sound
+      if (typeof window !== 'undefined' && Array.isArray(branches)) {
+        let oldIds = new Set(branches.map(b => b.id));
+        let newBranches = msg.branches.filter(b => !oldIds.has(b.id));
+        for (const nb of newBranches) {
+          if (nb.parentId) {
+            let parent = msg.branches.find(b => b.id === nb.parentId);
+            if (parent && parent.creatorId === userId) {
+              // Play notification sound
+              try {
+                let ctx = new (window.AudioContext || window.webkitAudioContext)();
+                let o = ctx.createOscillator();
+                let g = ctx.createGain();
+                o.type = 'sine';
+                o.frequency.value = 880;
+                g.gain.value = 0.15;
+                o.connect(g); g.connect(ctx.destination);
+                o.start();
+                o.stop(ctx.currentTime + 0.18);
+                o.onended = () => ctx.close();
+              } catch(e) {}
+            }
+          }
+        }
+      }
+      branches = msg.branches.map(b => ({...b}));
+      // If editing, restore editing state on the branch
+      if (editingBranch) {
+        const idx = branches.findIndex(b => b.x === editingBranch.x && b.y === editingBranch.y);
+        if (idx !== -1) {
+          branches[idx].editing = true;
+        } else {
+          editingBranch = null;
+        }
+      }
+      drawBoard();
+    }
+  };
+  ws.onclose = () => { setTimeout(() => location.reload(), 2000); };
+
+  // Helper: broadcast branches to server
+  function broadcastBranches() {
+    if (ws.readyState === 1) {
+      ws.send(JSON.stringify({type: 'update', branches: branches.map(({editing, ...b}) => b)}));
+    }
+  }
+    const boardCanvas = document.getElementById('boardCanvas');
+    const boardCtx = boardCanvas.getContext('2d');
+  let scale = 0.36; // more zoomed in by default
+    let offsetX = 4000, offsetY = 4000; // center of canvas
+
+  // Branches: {id, text, x, y, parentId, editing}
+  let branches = [];
+  let editingBranch = null; // {x, y, value}
+  let branchIdCounter = 1;
+    // Track hovered branch id
+      // Track hovered branch id (local only)
+      let hoveredBranchId = null;
+
+  // Helper to generate a unique branch ID
+  function generateBranchId() {
+    return 'b_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+  }
+// Interactive reply placement state
+// (No replyMode: auto-placement only)
+    function drawBoard() {
+    // (No reply placement circle)
+      boardCtx.setTransform(1,0,0,1,0,0);
+      boardCtx.clearRect(0,0,boardCanvas.width,boardCanvas.height);
+      boardCtx.setTransform(scale,0,0,scale,-offsetX*scale+window.innerWidth/2,-offsetY*scale+window.innerHeight/2);
+  // Draw main red dot (was 'hi')
+  let hiHovered = hoveredBranchId === 'hi';
+  boardCtx.save();
+  boardCtx.beginPath();
+  boardCtx.arc(4000, 4000, 80, 0, 2 * Math.PI);
+  boardCtx.fillStyle = hiHovered ? '#ff5252' : '#ff1744';
+  boardCtx.shadowColor = '#ff1744';
+  boardCtx.shadowBlur = hiHovered ? 32 : 16;
+  boardCtx.fill();
+  boardCtx.restore();
+      // Find highlight chain if hovering a branch
+      let highlightChain = new Set();
+      let highlightLines = new Set();
+      let highlightRootLine = null;
+      if (hoveredBranchId && hoveredBranchId !== 'hi') {
+        let cur = branches.find(b => b.id === hoveredBranchId);
+        let prev = null;
+        while (cur) {
+          highlightChain.add(cur.id);
+          if (cur.parentId) {
+            let parent = branches.find(b => b.id === cur.parentId);
+            if (parent) {
+              highlightLines.add(cur.id);
+            }
+            prev = cur;
+            cur = parent;
+          } else {
+            // cur is a root (parentId null), so highlight line from dot to this box
+            highlightRootLine = cur;
+            cur = null;
+          }
+        }
+      }
+      // Draw highlight from dot to root if needed
+      if (highlightRootLine) {
+        boardCtx.save();
+        boardCtx.strokeStyle = '#fff';
+        boardCtx.shadowColor = '#fff';
+        boardCtx.shadowBlur = 16;
+        boardCtx.lineWidth = 7;
+        boardCtx.beginPath();
+        boardCtx.moveTo(4000, 4000);
+        boardCtx.lineTo(highlightRootLine.x, highlightRootLine.y);
+        boardCtx.stroke();
+        boardCtx.restore();
+      }
+      // Draw branches and lines
+      // Helper: compute depth from root for each branch
+      function getBranchDepth(branch) {
+        let depth = 0;
+        let cur = branch;
+        while (cur && cur.parentId) {
+          cur = branches.find(b => b.id === cur.parentId);
+          if (cur) depth++;
+        }
+        return depth;
+      }
+      for (const branch of branches) {
+        let parent = branch.parentId ? branches.find(b => b.id === branch.parentId) : null;
+        let px = parent ? parent.x : 4000;
+        let py = parent ? parent.y : 4000;
+        let isHovered = branch.id === hoveredBranchId;
+        let branchColor = colorForUser(branch.creatorId);
+        // Gradually shrink box and font size by depth
+        let depth = getBranchDepth(branch);
+  let scaleF = Math.max(0.3, 1 - depth * 0.25); // min 30% size, much more dramatic
+        // Make font scale more dramatic for larger boxes
+        let fontScale = 1 + (scaleF - 0.3) * 1.2;
+        // If this is a direct reply to the root (parentId is null), make text extra large
+        if (branch.parentId === null) {
+          fontScale *= 5;
+        }
+        let w = 48 * scaleF, minH = 14 * scaleF, minFont = 2 * fontScale, maxFont = 2.5 * fontScale;
+        // Highlight line if in highlightLines (glow white)
+        if (highlightLines.has(branch.id)) {
+          boardCtx.save();
+          boardCtx.strokeStyle = '#fff';
+          boardCtx.shadowColor = '#fff';
+          boardCtx.shadowBlur = 16;
+          boardCtx.lineWidth = 7;
+          boardCtx.beginPath();
+          boardCtx.moveTo(px, py);
+          boardCtx.lineTo(branch.x, branch.y);
+          boardCtx.stroke();
+          boardCtx.restore();
+        }
+        // Draw normal line
+  boardCtx.strokeStyle = branchColor;
+  boardCtx.lineWidth = 0.1;
+  boardCtx.beginPath();
+  boardCtx.moveTo(px, py);
+  boardCtx.lineTo(branch.x, branch.y);
+  boardCtx.stroke();
+        // Blinking red dot at end of branch if editing
+        if (branch.editing && Math.floor(Date.now()/500)%2 === 0) {
+          boardCtx.save();
+          boardCtx.beginPath();
+          boardCtx.arc(branch.x, branch.y, 7 * scaleF, 0, 2*Math.PI);
+          boardCtx.fillStyle = '#ff1744';
+          boardCtx.shadowColor = '#ff1744';
+          boardCtx.shadowBlur = 12 * scaleF;
+          boardCtx.fill();
+          boardCtx.restore();
+        }
+        // Box size and font size (tiny)
+        let text = branch.editing && editingBranch ? editingBranch.value : branch.text;
+        // Word wrap: split text into lines that fit in box
+        boardCtx.font = `bold ${maxFont}px Arial, Helvetica, sans-serif`;
+        function wrapText(text, maxWidth) {
+          if (!text) return [''];
+          let words = text.split(/(\s+)/);
+          let lines = [];
+          let line = '';
+          for (let n = 0; n < words.length; n++) {
+            let testLine = line + words[n];
+            let metrics = boardCtx.measureText(testLine);
+            if (metrics.width > maxWidth && line) {
+              lines.push(line);
+              line = words[n].trimStart();
+            } else {
+              line = testLine;
+            }
+          }
+          lines.push(line);
+          return lines;
+        }
+  let lines = wrapText(text, w-6);
+  // Grow height for lines
+  let h = Math.max(minH, lines.length * (maxFont + 1));
+        // Draw box
+        // Glow red if being edited by anyone
+        if (branch.editing) {
+          boardCtx.save();
+          boardCtx.shadowColor = '#ff1744';
+          boardCtx.shadowBlur = 16 * scaleF;
+        }
+        // Fill and border color by creator
+        let highlight = highlightChain.has(branch.id);
+        if (isHovered || highlight) {
+          boardCtx.save();
+          boardCtx.shadowColor = '#fff';
+          boardCtx.shadowBlur = 24 * scaleF;
+          boardCtx.fillStyle = branchColor;
+          boardCtx.beginPath();
+          boardCtx.rect(branch.x-w/2, branch.y-h/2, w, h);
+          boardCtx.fill();
+          boardCtx.restore();
+          boardCtx.fillStyle = branchColor;
+        } else {
+          boardCtx.fillStyle = '#222';
+        }
+  // No visible border: skip stroke
+  boardCtx.beginPath();
+  boardCtx.rect(branch.x-w/2, branch.y-h/2, w, h);
+  boardCtx.fill();
+        if (branch.editing) boardCtx.restore();
+        // Draw text or input (multi-line)
+        boardCtx.fillStyle = (isHovered || highlight) ? '#222' : '#fff';
+        boardCtx.font = `bold ${maxFont}px Arial, Helvetica, sans-serif`;
+        boardCtx.textAlign = 'center';
+        boardCtx.textBaseline = 'middle';
+        let y0 = branch.y - h/2 + maxFont/2 + 1 * scaleF;
+        if (branch.editing) {
+          for (let i = 0; i < lines.length; ++i) {
+            boardCtx.fillText(lines[i], branch.x, y0 + i * (maxFont + 1));
+          }
+          // Blinking red line at end of last line (visible to all)
+          if (Math.floor(Date.now()/500)%2 === 0) {
+            let lastLine = lines[lines.length-1];
+            let metrics = boardCtx.measureText(lastLine);
+            let cx = branch.x + metrics.width/2 + 2 * scaleF;
+            let cy = y0 + (lines.length-1)*(maxFont+1);
+            boardCtx.beginPath();
+            boardCtx.moveTo(cx, cy - maxFont/2);
+            boardCtx.lineTo(cx, cy + maxFont/2);
+            boardCtx.strokeStyle = '#ff1744';
+            boardCtx.lineWidth = 1.5 * scaleF;
+            boardCtx.stroke();
+          }
+        } else {
+          for (let i = 0; i < lines.length; ++i) {
+            boardCtx.fillText(lines[i], branch.x, y0 + i * (maxFont + 1));
+          }
+        }
+      }
+    // Mouse move: update hoveredBranchId and redraw
+    boardCanvas.addEventListener('mousemove', e => {
+      const rect = boardCanvas.getBoundingClientRect();
+      const screenX = e.clientX - rect.left;
+      const screenY = e.clientY - rect.top;
+      const boardX = (screenX/scale) + offsetX - window.innerWidth/(2*scale);
+      const boardY = (screenY/scale) + offsetY - window.innerHeight/(2*scale);
+      let found = null;
+      for (const branch of branches) {
+        let w = 48, minH = 14, maxFont = 8;
+        let text = branch.editing && editingBranch ? editingBranch.value : branch.text;
+        let lines = (text ? text.split('\n') : ['']);
+        let h = Math.max(minH, lines.length * (maxFont + 1));
+        if (boardX >= branch.x-w/2 && boardX <= branch.x+w/2 && boardY >= branch.y-h/2 && boardY <= branch.y+h/2) {
+          found = branch.id;
+        }
+      }
+      // Check if hovering 'hi' (after boxes)
+      if (!found) {
+        const dx = boardX - 4000, dy = boardY - 4000;
+        if (Math.sqrt(dx*dx + dy*dy) < 90) found = 'hi';
+      }
+      if (hoveredBranchId !== found) {
+        hoveredBranchId = found;
+        drawBoard();
+      }
+    });
+
+    // Mouse leave: clear hover
+    boardCanvas.addEventListener('mouseleave', e => {
+      if (hoveredBranchId !== null) {
+        hoveredBranchId = null;
+        drawBoard();
+      }
+    });
+    }
+    // Helper: check if click is on 'hi'
+    function isClickOnHi(canvasX, canvasY) {
+  const dx = canvasX - 4000, dy = canvasY - 4000;
+  return Math.sqrt(dx*dx + dy*dy) < 90;
+    }
+
+    // Helper: check if click is on a branch box (returns branch or null)
+    function getBranchAt(boardX, boardY) {
+      // Use the same wrapping and height logic as in drawBoard
+      // Use same depth-based scaling as drawBoard
+      function getBranchDepth(branch) {
+        let depth = 0;
+        let cur = branch;
+        while (cur && cur.parentId) {
+          cur = branches.find(b => b.id === cur.parentId);
+          if (cur) depth++;
+        }
+        return depth;
+      }
+      for (const branch of branches) {
+        let depth = getBranchDepth(branch);
+  let scaleF = Math.max(0.3, 1 - depth * 0.25);
+        let w = 48 * scaleF, minH = 14 * scaleF, maxFont = 2.5 * scaleF;
+        function wrapText(text, maxWidth) {
+          if (!text) return [''];
+          let words = text.split(/(\s+)/);
+          let lines = [];
+          let line = '';
+          for (let n = 0; n < words.length; n++) {
+            let testLine = line + words[n];
+            let metrics = boardCtx.measureText(testLine);
+            if (metrics.width > maxWidth && line) {
+              lines.push(line);
+              line = words[n].trimStart();
+            } else {
+              line = testLine;
+            }
+          }
+          lines.push(line);
+          return lines;
+        }
+        let text = branch.editing && editingBranch ? editingBranch.value : branch.text;
+        let lines = wrapText(text, w-6);
+        let h = Math.max(minH, lines.length * (maxFont + 1));
+        if (boardX >= branch.x-w/2 && boardX <= branch.x+w/2 && boardY >= branch.y-h/2 && boardY <= branch.y+h/2) {
+          return branch.id;
+        }
+      }
+      return null;
+    }
+
+    // On click, check if on 'hi' or a branch, then spawn reply box
+    boardCanvas.addEventListener('click', e => {
+      const rect = boardCanvas.getBoundingClientRect();
+      const screenX = e.clientX - rect.left;
+      const screenY = e.clientY - rect.top;
+      const boardX = (screenX/scale) + offsetX - window.innerWidth/(2*scale);
+      const boardY = (screenY/scale) + offsetY - window.innerHeight/(2*scale);
+      // If already editing, ignore further clicks
+      // Prevent spamming empty boxes: if any box is being edited and is empty, don't allow new box
+      if (editingBranch) {
+        // Find the branch being edited
+        const editing = branches.find(b => b.editing);
+        if (editing && (!editing.text || editing.text.trim() === '')) return;
+      }
+      // Only allow replies to go outwards from the root (4000,4000)
+      let parentId = getBranchAt(boardX, boardY);
+      if (parentId !== null) {
+        let parent = branches.find(b => b.id === parentId);
+        if (!parent) return;
+        // Compute outward direction from root to parent
+        let rootX = 4000, rootY = 4000;
+        let dx = parent.x - rootX, dy = parent.y - rootY;
+        let baseAngle = Math.atan2(dy, dx);
+        // Restrict reply angle to +/- 90deg from outward direction
+        let angle = baseAngle + (Math.random() - 0.5) * Math.PI;
+        let r = 80;
+        let bx = parent.x + Math.cos(angle)*r;
+        let by = parent.y + Math.sin(angle)*r;
+        for (const b of branches) b.editing = false;
+        branches.push({id: generateBranchId(), text: '', x: bx, y: by, parentId: parent.id, editing: true, creatorId: userId});
+        editingBranch = {x: bx, y: by, value: ''};
+        scale = 10.0;
+        offsetX = bx;
+        offsetY = by;
+        broadcastBranches();
+        drawBoard();
+        return;
+      } else if (isClickOnHi(boardX, boardY)) {
+        // Place at random direction from hi
+        let angle = Math.random() * 2 * Math.PI;
+        let r = 180;
+        let bx = 4000 + Math.cos(angle)*r;
+        let by = 4000 + Math.sin(angle)*r;
+        // Clear editing on all other branches
+        for (const b of branches) b.editing = false;
+          branches.push({id: generateBranchId(), text: '', x: bx, y: by, parentId: null, editing: true, creatorId: userId});
+        editingBranch = {x: bx, y: by, value: ''};
+        scale = 10.0;
+        offsetX = bx;
+        offsetY = by;
+        broadcastBranches();
+        drawBoard();
+      }
+    });
+
+    // Keyboard input for editing
+    window.addEventListener('keydown', e => {
+      if (!editingBranch) return;
+      if (e.key === ' ' || e.code === 'Space') {
+        e.preventDefault();
+        editingBranch.value += ' ';
+        drawBoard();
+        return;
+      }
+      if (e.key === 'Enter' && !e.shiftKey) {
+        let toDelete = null;
+        for (const b of branches) {
+          if (b.editing && b.x === editingBranch.x && b.y === editingBranch.y) {
+            if (!editingBranch.value.trim()) {
+              toDelete = b.id;
+            } else {
+              b.text = editingBranch.value.trim();
+              b.editing = false;
+            }
+          }
+        }
+        if (toDelete !== null) {
+          // Remove the branch
+          branches = branches.filter(b => b.id !== toDelete);
+        }
+        editingBranch = null;
+        // Clear editing on all other branches (safety)
+        for (const b of branches) b.editing = false;
+        runLayout(); // Nudge other boxes if this one grew
+        broadcastBranches();
+        drawBoard();
+      } else if (e.key === 'Backspace') {
+        editingBranch.value = editingBranch.value.slice(0, -1);
+        drawBoard();
+      } else if (e.key.length === 1) {
+        editingBranch.value += e.key;
+        drawBoard();
+      } else if (e.key === 'Enter' && e.shiftKey) {
+        editingBranch.value += '\n';
+        drawBoard();
+      }
+    });
+
+    // Force-directed/nudge layout: repel boxes, keep near parent
+    function runLayout() {
+      const baseMinDist = 110;
+      // Helper: compute depth from root for each branch
+      function getBranchDepth(branch) {
+        let depth = 0;
+        let cur = branch;
+        while (cur && cur.parentId) {
+          cur = branches.find(b => b.id === cur.parentId);
+          if (cur) depth++;
+        }
+        return depth;
+      }
+      for (let iter = 0; iter < 30; ++iter) { // more iterations for stability
+        for (let i = 0; i < branches.length; ++i) {
+          let a = branches[i];
+          let aDepth = getBranchDepth(a);
+          let aScaleF = Math.max(0.3, 1 - aDepth * 0.25);
+          // Repel from other boxes
+          for (let j = 0; j < branches.length; ++j) {
+            if (i === j) continue;
+            let b = branches[j];
+            let bDepth = getBranchDepth(b);
+            let bScaleF = Math.max(0.3, 1 - bDepth * 0.25);
+            // Use the smaller scale for minDist between a and b
+            let minDist = baseMinDist * Math.min(aScaleF, bScaleF);
+            let dx = a.x - b.x, dy = a.y - b.y;
+            let dist = Math.sqrt(dx*dx + dy*dy);
+            if (dist < minDist) {
+              // Stronger repulsion when very close, but scale push by size
+              let push = ((minDist-dist)/2) * 1.25 * Math.min(aScaleF, bScaleF);
+              let angle = Math.atan2(dy, dx);
+              a.x += Math.cos(angle)*push;
+              a.y += Math.sin(angle)*push;
+            }
+          }
+          // Spring to parent (use parentId)
+          let parent = a.parentId ? branches.find(b => b.id === a.parentId) : null;
+          let px = parent ? parent.x : 4000;
+          let py = parent ? parent.y : 4000;
+          let dxp = px - a.x, dyp = py - a.y;
+          let distp = Math.sqrt(dxp*dxp + dyp*dyp);
+          let target = parent ? 110 * aScaleF : 220; // keep root at normal size
+          if (Math.abs(distp - target) > 2) {
+            let spring = (distp - target) * 0.12;
+            a.x += dxp/distp * spring;
+            a.y += dyp/distp * spring;
+          }
+        }
+      }
+    }
+
+    // Blinking cursor animation
+    setInterval(() => { if (editingBranch) drawBoard(); }, 500);
+
+    window.addEventListener('resize', drawBoard);
+    drawBoard();
+
+  // Zoom with scroll wheel
+  boardCanvas.addEventListener('wheel', e => {
+    // Pan with left mouse drag
+    let dragging = false;
+    let dragStart = null;
+  // Set cursor to auto except when dragging
+    boardCanvas.addEventListener('mousedown', e => {
+      if (e.button !== 0) return; // Only left click
+      dragging = true;
+      dragStart = {x: e.clientX, y: e.clientY, ox: offsetX, oy: offsetY};
+      boardCanvas.style.cursor = 'all-scroll';
+    });
+    window.addEventListener('mousemove', e => {
+      if (dragging && dragStart) {
+        offsetX = dragStart.ox - (e.clientX - dragStart.x)/scale;
+        offsetY = dragStart.oy - (e.clientY - dragStart.y)/scale;
+        drawBoard();
+      }
+    });
+    window.addEventListener('mouseup', e => {
+      boardCanvas.style.cursor = 'auto';
+      dragging = false;
+      dragStart = null;
+    });
+      e.preventDefault();
+      const mouseX = (e.offsetX/scale) + offsetX - window.innerWidth/(2*scale);
+      const mouseY = (e.offsetY/scale) + offsetY - window.innerHeight/(2*scale);
+      if (e.deltaY < 0) scale *= 1.1; else scale /= 1.1;
+      offsetX = mouseX - (e.offsetX/scale) + window.innerWidth/(2*scale);
+      offsetY = mouseY - (e.offsetY/scale) + window.innerHeight/(2*scale);
+      drawBoard();
+    }, {passive:false});
+
+    window.addEventListener('resize', drawBoard);
+    drawBoard();
+  </script>
+</body>
+</html>

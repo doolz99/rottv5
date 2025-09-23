@@ -1,3 +1,4 @@
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -62,7 +63,55 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FRONTEND_DIR = os.path.join(BASE_DIR, 'frontend')
 
 
+
 app = FastAPI()
+
+# ========== NEETBOARD MULTIPLAYER (BASIC) =============
+# In-memory board state for neetboard (branches only)
+neetboard_state = {
+    "branches": []  # list of dicts: {id, text, x, y, parentId}
+}
+neetboard_clients = set()
+
+def get_neetboard_online_count():
+    return len(neetboard_clients)
+
+from fastapi import WebSocket
+import json
+
+@app.websocket("/ws/neetboard")
+async def neetboard_ws(websocket: WebSocket):
+    await websocket.accept()
+    neetboard_clients.add(websocket)
+    # Send current state
+    await websocket.send_text(json.dumps({"type": "init", "branches": neetboard_state["branches"], "online": get_neetboard_online_count()}))
+    # Broadcast new online count
+    for ws in list(neetboard_clients):
+        try:
+            await ws.send_text(json.dumps({"type": "online", "online": get_neetboard_online_count()}))
+        except Exception:
+            neetboard_clients.discard(ws)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            msg = json.loads(data)
+            if msg.get("type") == "update":
+                # Replace state and broadcast
+                neetboard_state["branches"] = msg["branches"]
+                for ws in list(neetboard_clients):
+                    try:
+                        await ws.send_text(json.dumps({"type": "update", "branches": neetboard_state["branches"]}))
+                        await ws.send_text(json.dumps({"type": "online", "online": get_neetboard_online_count()}))
+                    except Exception:
+                        neetboard_clients.discard(ws)
+    except Exception:
+        neetboard_clients.discard(websocket)
+        # Broadcast new online count
+        for ws in list(neetboard_clients):
+            try:
+                await ws.send_text(json.dumps({"type": "online", "online": get_neetboard_online_count()}))
+            except Exception:
+                neetboard_clients.discard(ws)
 
 # --- Periodic Cleanup Task for Stale Users/Sessions ---
 STALE_WS_TIMEOUT = 60  # seconds
@@ -94,6 +143,18 @@ app.add_middleware(
 )
 
 # Data structures
+def get_available_users():
+    # Users not in a chat (any mode)
+    return [uid for uid, ws in user_ws.items() if ws.client_state.name == 'CONNECTED' and user_chat.get(uid) is None]
+
+async def broadcast_available_users():
+    users = get_available_users()
+    payload = {"type": "available_users", "users": [{"id": uid} for uid in users]}
+    for ws in user_ws.values():
+        try:
+            await ws.send_json(payload)
+        except Exception:
+            pass
 waiting_random: deque[str] = deque()
 waiting_tagged: List[Tuple[str, Set[str]]] = []  # (user_id, tags)
 active_chats: Dict[str, Dict] = {}
@@ -258,6 +319,7 @@ async def websocket_endpoint(ws: WebSocket):
     await ws.send_json({"type": "welcome", "userId": user_id})
     # Immediately broadcast new population
     await broadcast_population()
+    await broadcast_available_users()
     try:
         while True:
             data = await ws.receive_json()
@@ -284,6 +346,7 @@ async def websocket_endpoint(ws: WebSocket):
                 # Only report 'paired' after an explicit paired event has been sent; queue_status here reflects waiting state only.
                 await ws.send_json({"type": "queue_status", "status": "in_chat" if user_chat[user_id] else "waiting"})
                 await broadcast_tag_counts()
+                await broadcast_available_users()
 
             elif msg_type == 'join_with_tags':
                 tags_raw = data.get('tags', [])
@@ -329,6 +392,15 @@ async def websocket_endpoint(ws: WebSocket):
                     await pair_user(user_id)
                 await ws.send_json({"type": "queue_status", "status": "in_chat" if user_chat[user_id] else "waiting"})
                 await broadcast_tag_counts()
+                await broadcast_available_users()
+            elif msg_type == 'request_user_chat':
+                # User clicked a circle to request a chat with a specific user
+                target_id = data.get('userId')
+                # Only allow if both are available and not in a chat (any mode)
+                if target_id and user_chat.get(user_id) is None and user_chat.get(target_id) is None:
+                    await establish_chat(user_id, target_id, matched_tags=set())
+                    await broadcast_available_users()
+                # else: ignore silently
 
             elif msg_type == 'message':
                 chat_id = user_chat.get(user_id)
@@ -446,8 +518,10 @@ async def websocket_endpoint(ws: WebSocket):
         await disconnect_user(user_id)
         await broadcast_tag_counts()
         await broadcast_population()
+        await broadcast_available_users()
     except Exception:
         await disconnect_user(user_id)
+        await broadcast_available_users()
         await broadcast_tag_counts()
         await broadcast_population()
 
@@ -469,3 +543,8 @@ async def home_page():
 @app.get("/chat", response_class=HTMLResponse)
 async def chat_page():
     return _page('chat.html')
+
+# Serve neetboard.html at /neetboard
+@app.get("/neetboard", response_class=HTMLResponse)
+async def neetboard_page():
+    return _page('neetboard.html')

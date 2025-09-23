@@ -1,4 +1,102 @@
 // --- Mobile block overlay logic ---
+// --- Available users visual indicator logic ---
+const userIndicatorCanvas = document.getElementById('userIndicatorCanvas');
+let availableUsers = [];
+let userIndicatorPositions = [];
+function drawUserIndicators() {
+  if (!userIndicatorCanvas) return;
+  const ctx = userIndicatorCanvas.getContext('2d');
+  ctx.clearRect(0, 0, userIndicatorCanvas.width, userIndicatorCanvas.height);
+  userIndicatorPositions = [];
+  if (!availableUsers.length) return;
+  const w = userIndicatorCanvas.width, h = userIndicatorCanvas.height;
+  const cx = w/2, cy = h/2, r = Math.min(w,h)/3;
+  const N = availableUsers.length;
+  function userColor(id) {
+    // Simple hash to HSL color
+    let hash = 0;
+    for (let i = 0; i < id.length; ++i) {
+      hash = ((hash << 5) - hash) + id.charCodeAt(i);
+      hash |= 0;
+    }
+    const hue = Math.abs(hash) % 360;
+    return `hsl(${hue}, 65%, 55%)`;
+  }
+  for (let i = 0; i < N; ++i) {
+    const angle = (2 * Math.PI * i) / N;
+    const x = cx + r * Math.cos(angle);
+    const y = cy + r * Math.sin(angle);
+    userIndicatorPositions.push({x, y, id: availableUsers[i].id});
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y, 40, 0, 2 * Math.PI);
+    ctx.fillStyle = userColor(availableUsers[i].id);
+    ctx.globalAlpha = 0.7;
+    ctx.fill();
+    ctx.globalAlpha = 1.0;
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.font = 'bold 22px sans-serif';
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('user', x, y);
+    ctx.restore();
+  }
+}
+function showUserIndicators(users) {
+  // Remove own user from the list
+  const myId = typeof userId !== 'undefined' ? userId : null;
+  availableUsers = myId ? users.filter(u => u.id !== myId) : users;
+  // Hide circles if currently paired
+  const isPaired = !!chatId;
+  if (userIndicatorCanvas) {
+    if (isPaired || users.length === 0) {
+      userIndicatorCanvas.style.display = 'none';
+      userIndicatorCanvas.style.pointerEvents = 'none';
+      userIndicatorCanvas.style.zIndex = '0';
+    } else {
+      userIndicatorCanvas.style.display = '';
+      drawUserIndicators();
+      userIndicatorCanvas.style.pointerEvents = 'auto';
+      userIndicatorCanvas.style.zIndex = '10';
+    }
+  }
+}
+if (userIndicatorCanvas) {
+  userIndicatorCanvas.width = window.innerWidth;
+  userIndicatorCanvas.height = window.innerHeight;
+  window.addEventListener('resize', () => {
+    userIndicatorCanvas.width = window.innerWidth;
+    userIndicatorCanvas.height = window.innerHeight;
+    drawUserIndicators();
+  });
+  userIndicatorCanvas.addEventListener('click', function(e) {
+    const rect = userIndicatorCanvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    for (const pos of userIndicatorPositions) {
+      const dx = x - pos.x, dy = y - pos.y;
+      if (dx*dx + dy*dy < 40*40) {
+        // Clicked this user
+        requestUserChat(pos.id);
+        break;
+      }
+    }
+  });
+}
+function requestUserChat(userId) {
+  // Send a request to the server to connect to this user
+  if (ws && ws.readyState === 1) {
+    ws.send(JSON.stringify({type: 'request_user_chat', userId}));
+    setStatus('connecting...');
+    showUserIndicators([]); // Hide overlay
+  }
+}
+// Listen for available user list from backend
+// (You must add backend support for this event)
+// Example usage: showUserIndicators([{id: 'user1'}, {id: 'user2'}]);
 function isMobileDevice() {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 }
@@ -220,6 +318,10 @@ function connect(){
   };
   ws.onmessage = (ev)=>{
     const data = JSON.parse(ev.data);
+    if (data.type === 'available_users') {
+      showUserIndicators(data.users || []);
+      return;
+    }
     switch(data.type){
       case 'welcome': userId=data.userId; break;
       case 'queue_status': {
@@ -237,12 +339,13 @@ function connect(){
   case 'paired':
       chatId=data.chatId;
       setStatus('paired');
-    console.debug('[paired event]', data.chatId, data.matchedTags);
+      console.debug('[paired event]', data.chatId, data.matchedTags);
       if(searchBtnGlobal){ searchBtnGlobal.disabled = true; }
+      if(disconnectBtn){ disconnectBtn.disabled = false; }
       if(data.matchedTags && data.matchedTags.length){ SOUND.matchedTags(); } else { SOUND.paired(); }
       typingGhostEl.textContent='';
       typingGhostEl.classList.remove('partner');
-  // matched tags bar removed (no tag pill render)
+      // matched tags bar removed (no tag pill render)
       if(data.matchedTags && data.matchedTags.length){
         speakGuide('matched on ' + data.matchedTags.join(', '), {tts:true});
       } else {

@@ -1,5 +1,9 @@
 <!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><title>rot.tv5 - chat</title><meta name="viewport" content="width=device-width,initial-scale=1"/><link rel="stylesheet" href="/static/styles.css"/></head><body class="chat-body">
 <div class="frame-edge frame-top"></div>
+<div style="position:fixed;left:50%;bottom:0;transform:translate(-50%,0);z-index:90;">
+	<button id="remoteToggle" class="remote-toggle bottom" aria-expanded="false" aria-controls="remotePanel" title="open remote">remote</button>
+			<button id="neetBoardBtn" class="neetboard-btn" style="position:absolute;left:100%;bottom:0;margin-left:72px;">neet board</button>
+</div>
 <div class="frame-edge frame-bottom"></div>
 <div class="frame-edge frame-left"></div>
 <div class="frame-edge frame-right"></div>
@@ -12,6 +16,8 @@
 </div>
 <div id="statusBar"></div>
 <div id="messages" class="messages"></div>
+<!-- Available users visual indicator overlay -->
+<canvas id="userIndicatorCanvas" width="800" height="600" style="position:fixed;left:0;top:0;width:100vw;height:100vh;pointer-events:none;z-index:10;display:none;"></canvas>
 <div id="selfDraft" class="self-draft"><span id="draftText"></span><span id="inlineCaret" class="inline-caret hidden">|</span></div>
 <div id="typingGhost" class="typing-ghost"></div>
 <div id="clickArea" class="click-area" tabindex="0" aria-label="click to type"></div>
@@ -23,8 +29,7 @@
 	<button type="submit" id="mobileSendBtn" class="mobile-send-btn">Send</button>
 </form>
 
-<!-- Remote toggle button (bottom drawer) -->
-<button id="remoteToggle" class="remote-toggle bottom" aria-expanded="false" aria-controls="remotePanel" title="open remote">remote</button>
+
 
 <!-- Sliding TV remote panel -->
 <div id="remotePanel" class="remote-panel" aria-hidden="true">
@@ -63,4 +68,15 @@
 	</div>
 </div>
 <div id="mobileBlockOverlay" style="display:none;"></div>
+<script>
+// Make the neet board button navigate to /neetboard
+document.addEventListener('DOMContentLoaded', function() {
+	var btn = document.getElementById('neetBoardBtn');
+	if (btn) {
+		btn.addEventListener('click', function() {
+			window.location.href = '/neetboard';
+		});
+	}
+});
+</script>
 <script src="/static/chat.js"></script></body></html>
