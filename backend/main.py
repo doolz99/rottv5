@@ -308,6 +308,9 @@ async def disconnect_user(user_id: str, notify_partner: bool = True):
         user_ws.pop(user_id, None)
         user_mode.pop(user_id, None)
         user_tags.pop(user_id, None)
+        # Always broadcast after a disconnect
+        await broadcast_available_users()
+        await broadcast_population()
 
 from urllib.parse import parse_qs
 
@@ -361,6 +364,7 @@ async def websocket_endpoint(ws: WebSocket):
                 await ws.send_json({"type": "queue_status", "status": "in_chat" if user_chat[user_id] else "waiting"})
                 await broadcast_tag_counts()
                 await broadcast_available_users()
+                await broadcast_population()
 
             elif msg_type == 'join_with_tags':
                 tags_raw = data.get('tags', [])
@@ -389,6 +393,8 @@ async def websocket_endpoint(ws: WebSocket):
                     await pair_user(user_id)
                 await ws.send_json({"type": "queue_status", "status": "in_chat" if user_chat[user_id] else "waiting"})
                 await broadcast_tag_counts()
+                await broadcast_available_users()
+                await broadcast_population()
 
             elif msg_type == 'skip':
                 # Disconnect from current chat but stay in same mode and immediately requeue
@@ -407,6 +413,7 @@ async def websocket_endpoint(ws: WebSocket):
                 await ws.send_json({"type": "queue_status", "status": "in_chat" if user_chat[user_id] else "waiting"})
                 await broadcast_tag_counts()
                 await broadcast_available_users()
+                await broadcast_population()
             elif msg_type == 'request_user_chat':
                 # User clicked a circle to request a chat with a specific user
                 target_id = data.get('userId')

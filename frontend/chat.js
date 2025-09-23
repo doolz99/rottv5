@@ -354,10 +354,17 @@ function connect(){
   ws.onmessage = (ev)=>{
     const data = JSON.parse(ev.data);
     if (data.type === 'available_users') {
+      console.log('[WS] available_users', data.users);
       showUserIndicators(data.users || []);
       // If not paired, keep polling
       handlePairingState();
       return;
+    }
+    if (data.type === 'population') {
+      console.log('[WS] population', data.count);
+      if (typeof populationCounter !== 'undefined' && populationCounter) {
+        populationCounter.textContent = String(data.count);
+      }
     }
     switch(data.type){
       case 'welcome':
