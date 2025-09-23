@@ -97,6 +97,32 @@ function requestUserChat(userId) {
 // Listen for available user list from backend
 // (You must add backend support for this event)
 // Example usage: showUserIndicators([{id: 'user1'}, {id: 'user2'}]);
+
+// --- Periodic polling for available users ---
+let availableUsersPollInterval = null;
+function startAvailableUsersPolling() {
+  if (availableUsersPollInterval) clearInterval(availableUsersPollInterval);
+  availableUsersPollInterval = setInterval(() => {
+    if (ws && ws.readyState === 1 && !chatId) {
+      ws.send(JSON.stringify({ type: 'available_users_poll' }));
+    }
+  }, 10000); // every 10 seconds
+}
+function stopAvailableUsersPolling() {
+  if (availableUsersPollInterval) {
+    clearInterval(availableUsersPollInterval);
+    availableUsersPollInterval = null;
+  }
+}
+
+// Start polling when not paired, stop when paired
+function handlePairingState() {
+  if (!chatId) {
+    startAvailableUsersPolling();
+  } else {
+    stopAvailableUsersPolling();
+  }
+}
 function isMobileDevice() {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 }
@@ -320,6 +346,8 @@ function connect(){
     const data = JSON.parse(ev.data);
     if (data.type === 'available_users') {
       showUserIndicators(data.users || []);
+      // If not paired, keep polling
+      handlePairingState();
       return;
     }
     switch(data.type){
@@ -331,60 +359,61 @@ function connect(){
           if(searchBtnGlobal && !chatId){ searchBtnGlobal.disabled = false; }
           if(disconnectBtn){ disconnectBtn.disabled = false; }
         } else if(st === 'in_chat') {
-          // Do not set paired until actual paired event sets chatId
           setStatus(chatId? 'paired':'connecting...');
         }
         console.debug('[queue_status]', st, 'chatId:', chatId);
         break; }
-  case 'paired':
-      chatId=data.chatId;
-      setStatus('paired');
-      console.debug('[paired event]', data.chatId, data.matchedTags);
-      if(searchBtnGlobal){ searchBtnGlobal.disabled = true; }
-      if(disconnectBtn){ disconnectBtn.disabled = false; }
-      if(data.matchedTags && data.matchedTags.length){ SOUND.matchedTags(); } else { SOUND.paired(); }
-      typingGhostEl.textContent='';
-      typingGhostEl.classList.remove('partner');
-      // matched tags bar removed (no tag pill render)
-      if(data.matchedTags && data.matchedTags.length){
-        speakGuide('matched on ' + data.matchedTags.join(', '), {tts:true});
-      } else {
-        speakGuide('connected to a partner', {tts:true});
-      }
-      break;
-  case 'message': addMessage(data.text, true); SOUND.messagePartner(); break;
-  case 'typing': typingGhostEl.textContent = data.preview; typingGhostEl.classList.add('partner'); applyFontSize(typingGhostEl, data.preview.length || 1); layoutOverlays(); adjustCentering(); break;
-    case 'tag_counts': tagCounts = data.counts || {}; updateRemoteTagTooltips(); break;
+      case 'paired':
+        chatId=data.chatId;
+        setStatus('paired');
+        handlePairingState();
+        console.debug('[paired event]', data.chatId, data.matchedTags);
+        if(searchBtnGlobal){ searchBtnGlobal.disabled = true; }
+        if(disconnectBtn){ disconnectBtn.disabled = false; }
+        if(data.matchedTags && data.matchedTags.length){ SOUND.matchedTags(); } else { SOUND.paired(); }
+        typingGhostEl.textContent='';
+        typingGhostEl.classList.remove('partner');
+        if(data.matchedTags && data.matchedTags.length){
+          speakGuide('matched on ' + data.matchedTags.join(', '), {tts:true});
+        } else {
+          speakGuide('connected to a partner', {tts:true});
+        }
+        break;
+      case 'message': addMessage(data.text, true); SOUND.messagePartner(); break;
+      case 'typing': typingGhostEl.textContent = data.preview; typingGhostEl.classList.add('partner'); applyFontSize(typingGhostEl, data.preview.length || 1); layoutOverlays(); adjustCentering(); break;
+      case 'tag_counts': tagCounts = data.counts || {}; updateRemoteTagTooltips(); break;
       case 'partner_disconnected':
         SOUND.partnerLeft();
         chatId=null;
         setStatus('disconnected');
+        handlePairingState();
         if(searchBtnGlobal){ searchBtnGlobal.disabled = false; }
         if(disconnectBtn){ disconnectBtn.disabled = false; }
-  // matched tags bar removed
-  speakGuide('partner disconnected', {tts:true});
+        speakGuide('partner disconnected', {tts:true});
         break;
       case 'population':
         if(populationCounter){
           populationCounter.textContent = String(data.count);
-          // simple highlight pulse when changes
           populationCounter.classList.add('hot');
           setTimeout(()=>populationCounter.classList.remove('hot'), 800);
-          // flash animation retrigger
           populationCounter.classList.remove('flash');
-          void populationCounter.offsetWidth; // force reflow to restart animation
-            populationCounter.classList.add('flash');
+          void populationCounter.offsetWidth;
+          populationCounter.classList.add('flash');
           spawnPopulationSparks(data.count);
           lastPopulation = data.count;
           SOUND.population();
         }
         break;
       default:
-        // Pass to tag canvas handler (if it's one of those types)
         handleTagCanvasMessages && handleTagCanvasMessages(data);
         break;
     }
   };
+
+// Start polling on load if not paired
+window.addEventListener('DOMContentLoaded', () => {
+  handlePairingState();
+});
   ws.onclose = ()=>{ setStatus('connection closed'); disableSkip(); };
 }
 

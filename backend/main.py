@@ -117,7 +117,7 @@ async def neetboard_ws(websocket: WebSocket):
 STALE_WS_TIMEOUT = 60  # seconds
 async def cleanup_stale_users():
     while True:
-        await asyncio.sleep(60)
+        await asyncio.sleep(10)
         stale = []
         for uid, ws in list(user_ws.items()):
             # If the websocket is closed or dead, mark for removal
