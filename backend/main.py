@@ -150,6 +150,7 @@ def get_available_users():
 async def broadcast_available_users():
     users = get_available_users()
     payload = {"type": "available_users", "users": [{"id": uid} for uid in users]}
+    print(f"[BROADCAST] available_users: {[u['id'] for u in payload['users']]}")
     for ws in user_ws.values():
         try:
             await ws.send_json(payload)
@@ -189,6 +190,7 @@ async def broadcast_population():
     if not user_ws:
         return
     payload = {"type":"population", "count": total}
+    print(f"[BROADCAST] population: {total}")
     for ws in list(user_ws.values()):
         try:
             await ws.send_json(payload)
