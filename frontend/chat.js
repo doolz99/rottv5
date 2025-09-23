@@ -170,9 +170,18 @@ if (isMobileDevice()) {
   // Optionally, stop further JS execution for chat
   throw new Error('Blocked on mobile');
 }
-const wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
+// Persistent userId storage
+let userId = localStorage.getItem('rottv5_userId') || null;
+let chatId = null;
 let ws;
-let userId=null; let chatId=null;
+function getWsUrl() {
+  let url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
+  if (userId) {
+    url += '?userId=' + encodeURIComponent(userId);
+  }
+  return url;
+}
+// ...existing code...
 let mode = sessionStorage.getItem('mode')||'random';
 let tags = [];
 try{ if(mode==='tags'){ tags = JSON.parse(sessionStorage.getItem('tags')||'[]'); } }catch(e){}
@@ -338,7 +347,7 @@ let tagCounts = {}; // updated from server
 
 function connect(){
   if(ws && (ws.readyState===0 || ws.readyState===1)) return; // already connecting/connected
-  ws = new WebSocket(wsUrl);
+  ws = new WebSocket(getWsUrl());
   ws.onopen = ()=>{
     setStatus('idle');
   };
@@ -351,7 +360,10 @@ function connect(){
       return;
     }
     switch(data.type){
-      case 'welcome': userId=data.userId; break;
+      case 'welcome':
+        userId = data.userId;
+        if (userId) localStorage.setItem('rottv5_userId', userId);
+        break;
       case 'queue_status': {
         const st = data.status;
         if(st === 'waiting'){
