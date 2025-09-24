@@ -80,7 +80,6 @@
     ws.onopen = () => {
       console.log('Neetboard WebSocket connected');
       reconnectAttempts = 0;
-      setupWebSocketHandlers();
     };
     
     ws.onerror = (error) => {
@@ -100,10 +99,8 @@
     };
   }
   
-  function setupWebSocketHandlers() {
-    if (!ws) return;
-    
-    ws.onmessage = (event) => {
+  connectWebSocket();
+  ws.onmessage = (event) => {
     let msg = JSON.parse(event.data);
     if (msg.type === 'online') {
       onlineCount = msg.online;
@@ -152,7 +149,7 @@
       }
       drawBoard();
     }
-  }
+  };
 
   // Helper: broadcast branches to server
   function broadcastBranches() {
@@ -656,20 +653,6 @@
     document.getElementById('blogBoardBtn').addEventListener('click', function() {
       window.location.href = '/blogboard';
     });
-    
-    // Initialize everything after DOM is ready
-    function initialize() {
-      setTimeout(() => {
-        connectWebSocket();
-      }, 100);
-    }
-    
-    // Wait for DOM to be ready
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', initialize);
-    } else {
-      initialize();
-    }
   </script>
 </body>
 </html>

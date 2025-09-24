@@ -369,6 +369,7 @@ let tagCounts = {}; // updated from server
 function connect(){
   if(ws && (ws.readyState===0 || ws.readyState===1)) return; // already connecting/connected
   ws = new WebSocket(wsUrl);
+  window.ws = ws; // Make ws globally accessible for inline handlers
   ws.onopen = ()=>{
     console.log(`[CHAT] WebSocket connected, sending register_user with userId: ${userId}`);
     // Send persistent userId immediately upon connection

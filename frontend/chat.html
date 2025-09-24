@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><title>rot.tv5 - chat</title><meta name="viewport" content="width=device-width,initial-scale=1"/><script>if(location.protocol==='https:')location.replace('http:'+location.href.substring(location.protocol.length));</script><link rel="stylesheet" href="/static/styles.css"/></head><body class="chat-body">
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><title>rot.tv5 - chat</title><meta name="viewport" content="width=device-width,initial-scale=1"/><link rel="stylesheet" href="/static/styles.css"/></head><body class="chat-body">
 <div class="frame-edge frame-top"></div>
 <div style="position:fixed;left:50%;bottom:0;transform:translate(-50%,0);z-index:90;">
 	<button id="remoteToggle" class="remote-toggle bottom" aria-expanded="false" aria-controls="remotePanel" title="open remote">remote</button>
@@ -21,15 +21,15 @@
     existing.remove();
     existingOverlay.remove();
     // Send WebSocket message that window is closed
-    if (typeof ws !== 'undefined' && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({type: 'window_status', status: 'closed'}));
+    if (typeof window.ws !== 'undefined' && window.ws.readyState === WebSocket.OPEN) {
+      window.window.ws.send(JSON.stringify({type: 'window_status', status: 'closed'}));
     }
     return;
   }
   
   // Send WebSocket message that window is opened
-  if (typeof ws !== 'undefined' && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({type: 'window_status', status: 'opened'}));
+  if (typeof window.ws !== 'undefined' && window.ws.readyState === WebSocket.OPEN) {
+    window.window.ws.send(JSON.stringify({type: 'window_status', status: 'opened'}));
   }
   
   // Create overlay to dim chat
@@ -40,8 +40,8 @@
     existing.remove(); 
     overlay.remove();
     // Send WebSocket message that window is closed
-    if (typeof ws !== 'undefined' && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({type: 'window_status', status: 'closed'}));
+    if (typeof window.ws !== 'undefined' && window.ws.readyState === WebSocket.OPEN) {
+      window.ws.send(JSON.stringify({type: 'window_status', status: 'closed'}));
     }
   };
   
@@ -60,8 +60,8 @@
     slideWindow.remove();
     overlay.remove();
     // Send WebSocket message that window is closed
-    if (typeof ws !== 'undefined' && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({type: 'window_status', status: 'closed'}));
+    if (typeof window.ws !== 'undefined' && window.ws.readyState === WebSocket.OPEN) {
+      window.ws.send(JSON.stringify({type: 'window_status', status: 'closed'}));
     }
   };
   headerDiv.appendChild(closeBtn);
@@ -136,15 +136,15 @@
           var messageText = e.target.textContent || e.target.innerText;
           spawnMockMessage(messageText);
           // Send mock message to partner via WebSocket
-          if (typeof ws !== 'undefined' && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({type: 'mock_message', text: messageText}));
+          if (typeof window.ws !== 'undefined' && window.ws.readyState === WebSocket.OPEN) {
+            window.ws.send(JSON.stringify({type: 'mock_message', text: messageText}));
           }
           // Auto-close the history window
           slideWindow.remove();
           overlay.remove();
           // Send WebSocket message that window is closed
-          if (typeof ws !== 'undefined' && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({type: 'window_status', status: 'closed'}));
+          if (typeof window.ws !== 'undefined' && window.ws.readyState === WebSocket.OPEN) {
+            window.ws.send(JSON.stringify({type: 'window_status', status: 'closed'}));
           }
         };
       }

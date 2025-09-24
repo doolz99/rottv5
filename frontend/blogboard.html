@@ -384,23 +384,13 @@
         });
         
         // Initialize
-        function initialize() {
-            stopTyping();
-            
-            // Load existing posts on page load
-            setTimeout(() => {
-                loadPosts();
-                // Connect to WebSocket after posts load
-                setTimeout(connectWebSocket, 500);
-            }, 100);
-        }
+        stopTyping();
         
-        // Wait for DOM to be ready
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initialize);
-        } else {
-            initialize();
-        }
+        // Load existing posts on page load
+        loadPosts();
+        
+        // Connect to WebSocket for real-time updates
+        connectWebSocket();
     </script>
 </body>
 </html>
