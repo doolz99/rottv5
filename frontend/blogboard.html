@@ -147,6 +147,44 @@
         let currentText = '';
         let wordCount = 0;
         
+        // WebSocket for real-time updates
+        let blogWs = null;
+        const wsUrl = `ws://${window.location.host}/ws/blogboard`;
+        
+        function connectWebSocket() {
+            if (blogWs && (blogWs.readyState === 0 || blogWs.readyState === 1)) {
+                return; // Already connecting or connected
+            }
+            
+            blogWs = new WebSocket(wsUrl);
+            
+            blogWs.onopen = () => {
+                console.log('Connected to blog WebSocket');
+            };
+            
+            blogWs.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                
+                if (data.type === 'init') {
+                    // Initial load of posts - handled by loadPosts() instead
+                    return;
+                } else if (data.type === 'new_post') {
+                    // New post from another user - add it to top
+                    addPostToDOM(data.post, true);
+                }
+            };
+            
+            blogWs.onclose = () => {
+                console.log('Blog WebSocket disconnected, reconnecting...');
+                // Reconnect after 3 seconds
+                setTimeout(connectWebSocket, 3000);
+            };
+            
+            blogWs.onerror = (error) => {
+                console.error('Blog WebSocket error:', error);
+            };
+        }
+        
         const overlayInput = document.getElementById('blogOverlayInput');
         const draft = document.getElementById('blogDraft');
         const draftContent = document.getElementById('blogDraftContent');
@@ -219,34 +257,100 @@
         }
         
         // Post the blog entry
-        function postBlog() {
+        async function postBlog() {
             // Check 200 word minimum
             if (wordCount < 200) {
                 return; // Don't post if under 200 words, no popup
             }
             
-            // Create post element
+            try {
+                // Save to backend
+                const response = await fetch('/api/blog/posts', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        content: currentText
+                    })
+                });
+                
+                if (response.ok) {
+                    const postData = await response.json();
+                    
+                    // Stop typing - post will appear via WebSocket broadcast
+                    stopTyping();
+                } else {
+                    const error = await response.json();
+                    console.error('Failed to save post:', error);
+                    // Could add user feedback here if needed
+                }
+            } catch (error) {
+                console.error('Error saving post:', error);
+                // Fallback to local storage if network fails
+                addPostToDOM({
+                    id: Date.now().toString(),
+                    content: currentText,
+                    timestamp: new Date().toISOString(),
+                    created_at: new Date().toISOString()
+                });
+                stopTyping();
+            }
+        }
+        
+        // Add a post to the DOM
+        function addPostToDOM(postData, isRealTime = false) {
+            // Check if post already exists (avoid duplicates)
+            if (document.querySelector(`[data-post-id="${postData.id}"]`)) {
+                return; // Post already exists
+            }
+            
             const postElement = document.createElement('div');
             postElement.className = 'blog-post';
+            postElement.dataset.postId = postData.id;
             
-            const now = new Date();
-            const timestamp = now.toLocaleDateString() + ' at ' + now.toLocaleTimeString();
+            const date = new Date(postData.timestamp);
+            const timestamp = date.toLocaleDateString() + ' at ' + date.toLocaleTimeString();
             
             postElement.innerHTML = `
-                <div class="blog-post-content">${currentText.replace(/\n/g, '<br>')}</div>
+                <div class="blog-post-content">${postData.content.replace(/\n/g, '<br>')}</div>
                 <div class="blog-post-meta">Posted on ${timestamp}</div>
             `;
             
-            // Add to posts container
-            postsContainer.appendChild(postElement);
+            // Add to posts container (prepend for newest first)
+            postsContainer.insertBefore(postElement, postsContainer.firstChild);
             
-            // Scroll to bottom to show new post
-            postsContainer.scrollTop = postsContainer.scrollHeight;
-            
-            // Stop typing
-            stopTyping();
-            
-            // No popup alert - silent posting
+            // Only scroll to top for real-time posts from other users
+            if (isRealTime) {
+                // Gentle scroll to show new post notification
+                postElement.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+                setTimeout(() => {
+                    postElement.style.backgroundColor = '';
+                }, 2000);
+                postsContainer.scrollTop = 0;
+            }
+        }
+        
+        // Load all posts from backend
+        async function loadPosts() {
+            try {
+                const response = await fetch('/api/blog/posts');
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Clear existing posts
+                    postsContainer.innerHTML = '';
+                    
+                    // Add each post to DOM
+                    data.posts.forEach(post => {
+                        addPostToDOM(post);
+                    });
+                } else {
+                    console.error('Failed to load posts');
+                }
+            } catch (error) {
+                console.error('Error loading posts:', error);
+            }
         }
         
         // Global keydown handler (like chat)
@@ -281,6 +385,12 @@
         
         // Initialize
         stopTyping();
+        
+        // Load existing posts on page load
+        loadPosts();
+        
+        // Connect to WebSocket for real-time updates
+        connectWebSocket();
     </script>
 </body>
 </html>

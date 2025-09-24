@@ -173,11 +173,29 @@ if (isMobileDevice()) {
 const wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
 let ws;
 
-// Persistent user identity (like neetboard)
+// Persistent user identity with tab support for same-device testing
 let userId = localStorage.getItem('chat_userid');
 if (!userId) {
   userId = 'u_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
   localStorage.setItem('chat_userid', userId);
+} else {
+  // For same-device testing: add tab identifier if multiple tabs detected
+  const tabId = sessionStorage.getItem('chat_tabid');
+  if (!tabId) {
+    // Generate a unique tab ID for this session
+    const newTabId = Math.random().toString(36).slice(2, 6);
+    sessionStorage.setItem('chat_tabid', newTabId);
+    
+    // Append tab ID to make each tab unique
+    const originalUserId = userId.split('_tab_')[0]; // Remove any existing tab suffix
+    userId = originalUserId + '_tab_' + newTabId;
+    
+    console.log(`Chat tab initialized: ${originalUserId} -> ${userId}`);
+  } else {
+    // Use existing tab-specific ID
+    const originalUserId = userId.split('_tab_')[0];
+    userId = originalUserId + '_tab_' + tabId;
+  }
 }
 
 let chatId=null;
@@ -348,6 +366,7 @@ function connect(){
   if(ws && (ws.readyState===0 || ws.readyState===1)) return; // already connecting/connected
   ws = new WebSocket(wsUrl);
   ws.onopen = ()=>{
+    console.log(`[CHAT] WebSocket connected, sending register_user with userId: ${userId}`);
     // Send persistent userId immediately upon connection
     if (userId) {
       ws.send(JSON.stringify({
@@ -359,6 +378,7 @@ function connect(){
     // Request current user list to ensure proper initial sync
     setTimeout(() => {
       if (ws && ws.readyState === 1) {
+        console.log(`[CHAT] Requesting available users`);
         ws.send(JSON.stringify({
           type: 'request_available_users'
         }));
@@ -368,6 +388,7 @@ function connect(){
   ws.onmessage = (ev)=>{
     const data = JSON.parse(ev.data);
     if (data.type === 'available_users') {
+      console.log(`[CHAT] Received available_users:`, data.users?.map(u => u.id) || []);
       showUserIndicators(data.users || []);
       // If not paired, keep polling
       handlePairingState();
@@ -378,7 +399,10 @@ function connect(){
       return;
     }
     switch(data.type){
-      case 'welcome': userId=data.userId; break;
+      case 'welcome': 
+        console.log(`[CHAT] Welcome message, server assigned userId: ${data.userId}, our userId: ${userId}`);
+        userId=data.userId; 
+        break;
       case 'queue_status': {
         const st = data.status;
         if(st === 'waiting'){

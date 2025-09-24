@@ -76,6 +76,30 @@ neetboard_clients = set()
 def get_neetboard_online_count():
     return len(neetboard_clients)
 
+# ========== BLOG BOARD STORAGE =============
+from datetime import datetime
+from typing import List, Dict, Any
+import uuid
+
+# In-memory blog post storage
+blog_posts: List[Dict[str, Any]] = []
+blog_clients = set()  # WebSocket connections for blog board
+
+class BlogPost:
+    def __init__(self, content: str):
+        self.id = str(uuid.uuid4())
+        self.content = content
+        self.timestamp = datetime.now().isoformat()
+        self.created_at = datetime.now()
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "content": self.content,
+            "timestamp": self.timestamp,
+            "created_at": self.created_at.isoformat()
+        }
+
 from fastapi import WebSocket
 import json
 
@@ -112,6 +136,52 @@ async def neetboard_ws(websocket: WebSocket):
                 await ws.send_text(json.dumps({"type": "online", "online": get_neetboard_online_count()}))
             except Exception:
                 neetboard_clients.discard(ws)
+
+@app.websocket("/ws/blogboard")
+async def blogboard_ws(websocket: WebSocket):
+    await websocket.accept()
+    blog_clients.add(websocket)
+    
+    # Send initial blog posts to new client
+    try:
+        await websocket.send_text(json.dumps({
+            "type": "init",
+            "posts": blog_posts
+        }))
+    except Exception:
+        blog_clients.discard(websocket)
+        return
+    
+    try:
+        # Keep connection alive - blog board is read-only via WebSocket
+        # Posts are created via REST API and broadcasted
+        while True:
+            # Just wait for messages to keep connection alive
+            await websocket.receive_text()
+    except Exception:
+        blog_clients.discard(websocket)
+
+async def broadcast_new_post(post_data: Dict[str, Any]):
+    """Broadcast new blog post to all connected clients"""
+    if not blog_clients:
+        return
+    
+    message = json.dumps({
+        "type": "new_post",
+        "post": post_data
+    })
+    
+    # Send to all connected blog clients
+    disconnected_clients = []
+    for websocket in list(blog_clients):
+        try:
+            await websocket.send_text(message)
+        except Exception:
+            disconnected_clients.append(websocket)
+    
+    # Clean up disconnected clients
+    for websocket in disconnected_clients:
+        blog_clients.discard(websocket)
 
 # --- Periodic Cleanup Task for Stale Users/Sessions ---
 STALE_WS_TIMEOUT = 60  # seconds
@@ -600,6 +670,51 @@ async def websocket_endpoint(ws: WebSocket):
         await broadcast_available_users()
         await broadcast_tag_counts()
         await broadcast_population()
+
+# ========== BLOG API ENDPOINTS =============
+from fastapi import HTTPException
+from pydantic import BaseModel
+
+class BlogPostCreate(BaseModel):
+    content: str
+
+class BlogPostResponse(BaseModel):
+    id: str
+    content: str
+    timestamp: str
+    created_at: str
+
+@app.post("/api/blog/posts", response_model=BlogPostResponse)
+async def create_blog_post(post_data: BlogPostCreate):
+    """Create a new blog post"""
+    if not post_data.content or not post_data.content.strip():
+        raise HTTPException(status_code=400, detail="Content cannot be empty")
+    
+    # Count words (simple word count)
+    word_count = len(post_data.content.strip().split())
+    if word_count < 200:
+        raise HTTPException(status_code=400, detail="Blog post must be at least 200 words")
+    
+    # Create new blog post
+    new_post = BlogPost(post_data.content.strip())
+    post_dict = new_post.to_dict()
+    blog_posts.append(post_dict)
+    
+    # Sort posts by creation time (newest first)
+    blog_posts.sort(key=lambda x: x['created_at'], reverse=True)
+    
+    # Broadcast new post to all connected WebSocket clients
+    await broadcast_new_post(post_dict)
+    
+    return BlogPostResponse(**post_dict)
+
+@app.get("/api/blog/posts")
+async def get_blog_posts():
+    """Get all blog posts, sorted by newest first"""
+    return {
+        "posts": blog_posts,
+        "total": len(blog_posts)
+    }
 
 """HTTP Routes for serving the frontend pages"""
 
