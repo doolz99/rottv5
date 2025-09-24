@@ -1,0 +1,21 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "run-uvicorn-8002",
+			"type": "shell",
+			"command": "uvicorn",
+			"args": [
+				"backend.main:app",
+				"--host",
+				"0.0.0.0",
+				"--port",
+				"8002"
+			],
+			"problemMatcher": [
+				"$tsc"
+			],
+			"group": "build"
+		}
+	]
+}

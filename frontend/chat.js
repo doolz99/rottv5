@@ -305,7 +305,11 @@ const SOUND = {
   messageSelf(){ playTone({freq:300,dur:0.07,vol:0.15,type:'square'}); },
   messagePartner(){ playTone({freq:440,dur:0.07,vol:0.18,type:'square'}); },
   skip(){ playTone({freq:260,dur:0.12,vol:0.2,type:'triangle'}); playTone({freq:190,dur:0.18,vol:0.14,type:'sine', attack:0.005}); },
-  population(){ playTone({freq:880,dur:0.06,vol:0.12,type:'sine'}); }
+  population(){ playTone({freq:880,dur:0.06,vol:0.12,type:'sine'}); },
+  windowStatus(){ chord([
+    {freq:600,dur:0.12,vol:0.15,type:'sine'},
+    {freq:800,dur:0.08,vol:0.12,type:'triangle'}
+  ]); }
 };
 
 function spawnPopulationSparks(newCount){
@@ -432,6 +436,15 @@ function connect(){
         break;
       case 'message': addMessage(data.text, true); SOUND.messagePartner(); break;
       case 'typing': typingGhostEl.textContent = data.preview; typingGhostEl.classList.add('partner'); applyFontSize(typingGhostEl, data.preview.length || 1); layoutOverlays(); adjustCentering(); break;
+      case 'window_status': 
+        console.log('[CHAT] Partner window status:', data.status);
+        console.log('[DEBUG] About to call updateRedDotStatus with:', data.status === 'opened');
+        updateRedDotStatus(data.status === 'opened');
+        break;
+      case 'mock_message':
+        console.log('[CHAT] Received mock message:', data.text);
+        spawnMockMessageFromPartner(data.text);
+        break;
       case 'tag_counts': tagCounts = data.counts || {}; updateRemoteTagTooltips(); break;
       case 'partner_disconnected':
         SOUND.partnerLeft();
@@ -460,6 +473,77 @@ function connect(){
         break;
     }
   };
+
+// Function to update red dot color based on partner's window status
+function updateRedDotStatus(partnerHasWindowOpen) {
+  console.log('[DEBUG] updateRedDotStatus called with:', partnerHasWindowOpen);
+  const redDot = document.getElementById('redDot');
+  console.log('[DEBUG] redDot element found:', redDot);
+  if (redDot) {
+    // Play unique beeping sound for window status change
+    SOUND.windowStatus();
+    
+    if (partnerHasWindowOpen) {
+      // Partner has window open - change to orange/yellow
+      redDot.style.setProperty('background', '#ffaa00', 'important');
+      redDot.style.setProperty('box-shadow', '0 0 10px rgba(255, 170, 0, 0.8)', 'important');
+      console.log('[CHAT] Red dot changed to orange - partner viewing window');
+    } else {
+      // Partner closed window - back to red
+      redDot.style.setProperty('background', '#ff3333', 'important');
+      redDot.style.setProperty('box-shadow', '0 0 10px rgba(255, 51, 51, 0.8)', 'important');
+      console.log('[CHAT] Red dot back to red - partner closed window');
+    }
+  } else {
+    console.log('[DEBUG] Red dot element not found!');
+  }
+}
+
+// Function to spawn mock messages received from partner
+function spawnMockMessageFromPartner(text) {
+  // Play mock sound
+  try {
+    var mockAudio = new Audio('/static/laughing-sound.mp3');
+    mockAudio.volume = 0.7;
+    mockAudio.play().catch(function(e) {
+      console.log('[MOCK] Could not play sound:', e);
+    });
+  } catch (e) {
+    console.log('[MOCK] Audio error:', e);
+  }
+  
+  var mockDiv = document.createElement('div');
+  mockDiv.style.cssText = 'position: fixed; z-index: 1000000; color: #ff4444; font-family: monospace; font-size: 144px; font-weight: bold; text-shadow: 6px 6px 12px rgba(0,0,0,0.9); animation: mockPop 0.3s ease-out; transition: opacity 0.5s ease-out; pointer-events: none; max-width: 90vw; line-height: 1.1; word-wrap: break-word;';
+  
+  // Random position in viewport
+  var x = Math.random() * (window.innerWidth * 0.1);
+  var y = Math.random() * (window.innerHeight * 0.3);
+  mockDiv.style.left = x + 'px';
+  mockDiv.style.top = y + 'px';
+  
+  // Add jester emoji and quoted text (half size)
+  mockDiv.innerHTML = '<span style="font-size:112px;margin-right:40px;display:inline-block;">🃏</span>"' + text + '"';
+  
+  // Add animation keyframes if not already present
+  if (!document.getElementById('mockAnimation')) {
+    var style = document.createElement('style');
+    style.id = 'mockAnimation';
+    style.textContent = '@keyframes mockPop { 0% { transform: scale(0) rotate(0deg); opacity: 0; } 50% { transform: scale(1.1) rotate(5deg); } 100% { transform: scale(1) rotate(0deg); opacity: 1; } }';
+    document.head.appendChild(style);
+  }
+  
+  document.body.appendChild(mockDiv);
+  
+  // Fade out after 5 seconds, then remove
+  setTimeout(function() {
+    if (mockDiv.parentElement) {
+      mockDiv.style.opacity = '0';
+      setTimeout(function() {
+        if (mockDiv.parentElement) mockDiv.remove();
+      }, 500);
+    }
+  }, 5000);
+}
 
 // Start polling on load if not paired
 window.addEventListener('DOMContentLoaded', () => {

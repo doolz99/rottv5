@@ -574,6 +574,32 @@ async def websocket_endpoint(ws: WebSocket):
                 if pws:
                     await pws.send_json({"type": "typing", "preview": preview})
 
+            elif msg_type == 'window_status':
+                chat_id = user_chat.get(user_id)
+                if not chat_id:
+                    continue
+                chat = active_chats.get(chat_id)
+                if not chat:
+                    continue
+                status = data.get('status', '')
+                partner = chat['a'] if chat['b'] == user_id else chat['b']
+                pws = user_ws.get(partner)
+                if pws:
+                    await pws.send_json({"type": "window_status", "status": status})
+
+            elif msg_type == 'mock_message':
+                chat_id = user_chat.get(user_id)
+                if not chat_id:
+                    continue
+                chat = active_chats.get(chat_id)
+                if not chat:
+                    continue
+                text = data.get('text', '')
+                partner = chat['a'] if chat['b'] == user_id else chat['b']
+                pws = user_ws.get(partner)
+                if pws:
+                    await pws.send_json({"type": "mock_message", "text": text})
+
             # ===== Tag Canvas Collaboration =====
             elif msg_type == 'open_tag_canvas':
                 tag = data.get('tag','').strip().lower()

@@ -291,3 +291,35 @@ button:hover{background:#222}
   .tco-toolbar{flex-wrap:wrap;}
   .tco-participants{order:3;width:100%;text-align:left;margin-left:0;}
 }
+
+/* Red dot at bottom left */
+.red-dot {
+  position: fixed !important;
+  left: 50% !important;
+  top: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  width: 50px !important;
+  height: 50px !important;
+  background: #ff0000 !important;
+  border: 5px solid #ffffff !important;
+  border-radius: 50% !important;
+  z-index: 999999 !important;
+  cursor: pointer !important;
+  box-shadow: 0 0 30px rgba(255, 0, 0, 1) !important;
+  animation: redPulse 1s infinite !important;
+}
+
+@keyframes redPulse {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    box-shadow: 0 0 30px rgba(255, 0, 0, 1);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.2);
+    box-shadow: 0 0 50px rgba(255, 0, 0, 1);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    box-shadow: 0 0 30px rgba(255, 0, 0, 1);
+  }
+}

@@ -9,6 +9,253 @@
 <div class="frame-edge frame-left"></div>
 <div class="frame-edge frame-right"></div>
 <div id="populationCounter" class="population-counter" aria-live="polite" title="people online">--</div>
+
+<!-- Red dot on the border -->
+<div id="redDot" class="red-dot" style="position:fixed!important;left:36px!important;bottom:200px!important;width:20px!important;height:20px!important;background:#ff3333!important;border-radius:50%!important;z-index:999999!important;box-shadow:0 0 10px rgba(255,51,51,0.8)!important;cursor:pointer!important;" onclick="
+  console.log('Creating slide-out window');
+  
+  // Remove existing window and overlay if they exist
+  var existing = document.getElementById('dynamicWindow');
+  var existingOverlay = document.getElementById('dynamicOverlay');
+  if (existing) {
+    existing.remove();
+    existingOverlay.remove();
+    // Send WebSocket message that window is closed
+    if (typeof ws !== 'undefined' && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({type: 'window_status', status: 'closed'}));
+    }
+    return;
+  }
+  
+  // Send WebSocket message that window is opened
+  if (typeof ws !== 'undefined' && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({type: 'window_status', status: 'opened'}));
+  }
+  
+  // Create overlay to dim chat
+  var overlay = document.createElement('div');
+  overlay.id = 'dynamicOverlay';
+  overlay.style.cssText = 'position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; background: black !important; z-index: 999998 !important;';
+  overlay.onclick = function() { 
+    existing.remove(); 
+    overlay.remove();
+    // Send WebSocket message that window is closed
+    if (typeof ws !== 'undefined' && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({type: 'window_status', status: 'closed'}));
+    }
+  };
+  
+  // Create slide-out window
+  var slideWindow = document.createElement('div');
+  slideWindow.id = 'dynamicWindow';
+  
+  var headerDiv = document.createElement('div');
+  headerDiv.style.cssText = 'padding: 20px; border-bottom: 1px solid #555; background: rgba(40,40,40,0.9); position: relative;';
+  headerDiv.innerHTML = '<h3 style=margin:0;color:#eee;>Chat History</h3>';
+  
+  var closeBtn = document.createElement('button');
+  closeBtn.innerHTML = '×';
+  closeBtn.style.cssText = 'position: absolute; right: 15px; top: 15px; background: none; border: none; color: #999; font-size: 24px; cursor: pointer;';
+  closeBtn.onclick = function() {
+    slideWindow.remove();
+    overlay.remove();
+    // Send WebSocket message that window is closed
+    if (typeof ws !== 'undefined' && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({type: 'window_status', status: 'closed'}));
+    }
+  };
+  headerDiv.appendChild(closeBtn);
+  
+  // Add navigation buttons
+  var navDiv = document.createElement('div');
+  navDiv.style.cssText = 'display: flex; gap: 10px; margin-top: 10px;';
+  
+  var upBtn = document.createElement('button');
+  upBtn.innerHTML = '↑ Up';
+  upBtn.style.cssText = 'background: #333; border: 1px solid #555; color: #ccc; padding: 5px 10px; cursor: pointer; border-radius: 3px; font-size: 12px;';
+  
+  var downBtn = document.createElement('button');
+  downBtn.innerHTML = '↓ Down';
+  downBtn.style.cssText = 'background: #333; border: 1px solid #555; color: #ccc; padding: 5px 10px; cursor: pointer; border-radius: 3px; font-size: 12px;';
+  
+  var mockBtn = document.createElement('button');
+  mockBtn.innerHTML = '🃏 Mock';
+  mockBtn.style.cssText = 'background: #444; border: 1px solid #666; color: #fff; padding: 5px 10px; cursor: pointer; border-radius: 3px; font-size: 12px; margin-left: auto;';
+  var mockMode = false;
+  
+  navDiv.appendChild(upBtn);
+  navDiv.appendChild(downBtn);
+  navDiv.appendChild(mockBtn);
+  headerDiv.appendChild(navDiv);
+  
+  var contentDiv = document.createElement('div');
+  contentDiv.style.cssText = 'padding: 20px; color: #ccc; flex: 1; overflow: hidden; font-family: monospace; font-size: 14px; line-height: 1.4; position: relative;';
+  contentDiv.className = 'content';
+  
+  // Variables for navigation
+  var currentPosition = 0;
+  var messageElements = [];
+  
+  // Get message history from the chat
+  var messages = document.querySelectorAll('.message');
+  if (messages.length === 0) {
+    contentDiv.innerHTML = '<div style=color:#888;font-style:italic;text-align:center;margin-top:40px;>No messages yet.<br>Start chatting to see history here!</div>';
+  } else {
+    // Create message elements array
+    messages.forEach(function(msg, index) {
+      var isPartner = msg.classList.contains('partner');
+      var msgText = (msg.textContent || msg.innerText || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      var color = isPartner ? '#ff4444' : '#ccc';
+      
+      var msgDiv = document.createElement('div');
+      msgDiv.style.cssText = 'margin-bottom:8px;padding:8px;color:' + color + ';background:rgba(255,255,255,0.02);';
+      msgDiv.innerHTML = msgText;
+      msgDiv.dataset.isPartner = isPartner.toString();
+      messageElements.push(msgDiv);
+    });
+    
+    // Start showing from the most recent messages (bottom)
+    currentPosition = Math.max(0, messageElements.length - 10);
+    updateDisplay();
+  }
+  
+  // Function to update the display
+  function updateDisplay() {
+    contentDiv.innerHTML = '<div style=margin-bottom:20px;><strong style=color:#aaa;>Message History (showing ' + Math.min(10, messageElements.length - currentPosition) + ' of ' + messageElements.length + '):</strong></div>';
+    
+    var displayEnd = Math.min(currentPosition + 10, messageElements.length);
+    for (var i = currentPosition; i < displayEnd; i++) {
+      var msgClone = messageElements[i].cloneNode(true);
+      
+      // If in mock mode and this is a partner message, make it clickable
+      if (mockMode && messageElements[i].dataset.isPartner === 'true') {
+        msgClone.style.cursor = 'pointer';
+        msgClone.style.border = '1px dashed #ff4444';
+        msgClone.title = 'Click to mock this message';
+        msgClone.onclick = function(e) {
+          var messageText = e.target.textContent || e.target.innerText;
+          spawnMockMessage(messageText);
+          // Send mock message to partner via WebSocket
+          if (typeof ws !== 'undefined' && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({type: 'mock_message', text: messageText}));
+          }
+          // Auto-close the history window
+          slideWindow.remove();
+          overlay.remove();
+          // Send WebSocket message that window is closed
+          if (typeof ws !== 'undefined' && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({type: 'window_status', status: 'closed'}));
+          }
+        };
+      }
+      
+      contentDiv.appendChild(msgClone);
+    }
+    
+    // Update button states
+    upBtn.disabled = currentPosition <= 0;
+    downBtn.disabled = currentPosition >= messageElements.length - 10;
+    upBtn.style.opacity = upBtn.disabled ? '0.5' : '1';
+    downBtn.style.opacity = downBtn.disabled ? '0.5' : '1';
+  }
+  
+  // Function to spawn a mock message in the viewport
+  function spawnMockMessage(text) {
+    // Play mock sound
+    try {
+      var mockAudio = new Audio('/static/laughing-sound.mp3');
+      mockAudio.volume = 0.7;
+      mockAudio.play().catch(function(e) {
+        console.log('[MOCK] Could not play sound:', e);
+      });
+    } catch (e) {
+      console.log('[MOCK] Audio error:', e);
+    }
+    
+    var mockDiv = document.createElement('div');
+    mockDiv.style.cssText = 'position: fixed; z-index: 1000000; color: #ff4444; font-family: monospace; font-size: 144px; font-weight: bold; text-shadow: 6px 6px 12px rgba(0,0,0,0.9); animation: mockPop 0.3s ease-out; transition: opacity 0.5s ease-out; pointer-events: none; max-width: 90vw; line-height: 1.1; word-wrap: break-word;';
+    
+    // Random position in viewport
+    var x = Math.random() * (window.innerWidth * 0.1);
+    var y = Math.random() * (window.innerHeight * 0.3);
+    mockDiv.style.left = x + 'px';
+    mockDiv.style.top = y + 'px';
+    
+    // Add jester emoji and quoted text (half size)
+    mockDiv.innerHTML = '<span style=font-size:112px;margin-right:40px;display:inline-block;>🃏</span>&quot;' + text + '&quot;';
+    
+    // Add animation keyframes
+    if (!document.getElementById('mockAnimation')) {
+      var style = document.createElement('style');
+      style.id = 'mockAnimation';
+      style.textContent = '@keyframes mockPop { 0% { transform: scale(0) rotate(0deg); opacity: 0; } 50% { transform: scale(1.1) rotate(5deg); } 100% { transform: scale(1) rotate(0deg); opacity: 1; } }';
+      document.head.appendChild(style);
+    }
+    
+    document.body.appendChild(mockDiv);
+    
+    // Fade out after 5 seconds, then remove
+    setTimeout(function() {
+      if (mockDiv.parentElement) {
+        mockDiv.style.opacity = '0';
+        setTimeout(function() {
+          if (mockDiv.parentElement) mockDiv.remove();
+        }, 500);
+      }
+    }, 5000);
+  }
+  
+  // Button click handlers
+  upBtn.onclick = function() {
+    if (currentPosition > 0) {
+      currentPosition = Math.max(0, currentPosition - 10);
+      updateDisplay();
+    }
+  };
+  
+  downBtn.onclick = function() {
+    if (currentPosition < messageElements.length - 10) {
+      currentPosition = Math.min(messageElements.length - 10, currentPosition + 10);
+      updateDisplay();
+    }
+  };
+  
+  // Mock button functionality
+  mockBtn.onclick = function() {
+    mockMode = !mockMode;
+    if (mockMode) {
+      mockBtn.innerHTML = '🃏 Mock ON';
+      mockBtn.style.background = '#664444';
+      mockBtn.style.borderColor = '#ff4444';
+    } else {
+      mockBtn.innerHTML = '🃏 Mock';
+      mockBtn.style.background = '#444';
+      mockBtn.style.borderColor = '#666';
+    }
+    updateDisplay();
+  };
+  
+  slideWindow.appendChild(headerDiv);
+  slideWindow.appendChild(contentDiv);
+  slideWindow.style.cssText = 'position: fixed !important; top: 0 !important; left: -400px !important; width: 400px !important; height: 100vh !important; background: linear-gradient(180deg, #181818, #070707) !important; border-right: 2px solid #2c2c2c !important; z-index: 999999 !important; display: flex !important; flex-direction: column !important; transition: left 0.4s ease !important; box-shadow: 4px 0 20px rgba(0,0,0,0.5) !important;';
+  
+  document.body.appendChild(overlay);
+  document.body.appendChild(slideWindow);
+  
+  // Trigger slide animation
+  setTimeout(function() {
+    slideWindow.style.left = '0px';
+  }, 10);
+  
+  console.log('Slide window created');
+"></div>
+
+<!-- Right-side button across from the red dot -->
+<div id="rightActionButton" title="open bottom window" style="position:fixed!important;right:36px!important;bottom:200px!important;width:20px!important;height:20px!important;background:#3388ff!important;border-radius:50%!important;z-index:999999!important;box-shadow:0 0 10px rgba(51,136,255,0.8)!important;cursor:pointer!important;"></div>
+
+<!-- Chat overlay for dimming -->
+<div id="chatOverlay" class="chat-overlay"></div>
+
 <!-- Slide-out guide character -->
 <div id="guideCharacter" class="guide-character" aria-live="polite" aria-atomic="true">
 	<div class="gc-avatar" role="img" aria-label="guide"></div>
@@ -86,6 +333,84 @@ document.addEventListener('DOMContentLoaded', function() {
 			window.location.href = '/blogboard';
 		});
 	}
+
+  // Right-side button: open/close a bottom-center window
+  var rightBtn = document.getElementById('rightActionButton');
+  if (rightBtn) {
+    rightBtn.addEventListener('click', function() {
+      var existing = document.getElementById('bottomCenterWindow');
+      var existingOverlay = document.getElementById('bottomCenterOverlay');
+      if (existing) {
+        if (existing.parentElement) existing.remove();
+        if (existingOverlay && existingOverlay.parentElement) existingOverlay.remove();
+        return;
+      }
+
+      // Create overlay
+      var overlay = document.createElement('div');
+      overlay.id = 'bottomCenterOverlay';
+      overlay.style.cssText = [
+        'position:fixed',
+        'left:0',
+        'top:0',
+        'width:100vw',
+        'height:100vh',
+        'background:rgba(0,0,0,0.6)',
+        'z-index:999998',
+        'pointer-events:none'
+      ].join(' !important; ') + ' !important;';
+      overlay.onclick = function() {
+        if (windowDiv.parentElement) windowDiv.remove();
+        if (overlay.parentElement) overlay.remove();
+      };
+
+      // Create bottom-center window
+      var windowDiv = document.createElement('div');
+      windowDiv.id = 'bottomCenterWindow';
+      windowDiv.style.cssText = [
+        'position:fixed',
+        'left:50%',
+        'bottom:0',
+        'transform:translate(-50%, 0)',
+        'width:640px',
+        'max-width:90vw',
+        'height:300px',
+        'background:linear-gradient(180deg,#181818,#0a0a0a)',
+        'border:2px solid #2c2c2c',
+        'border-bottom:none',
+        'border-top-left-radius:12px',
+        'border-top-right-radius:12px',
+        'box-shadow:0 -6px 24px rgba(0,0,0,0.6)',
+        'z-index:1000000',
+        'display:flex',
+        'flex-direction:column'
+      ].join(' !important; ') + ' !important;';
+
+      var header = document.createElement('div');
+      header.style.cssText = 'padding:12px 16px !important; border-bottom:1px solid #333 !important; color:#ddd !important; position:relative !important; font-weight:600 !important;';
+      header.textContent = 'Bottom Center Window';
+
+      var closeBtn = document.createElement('button');
+      closeBtn.setAttribute('aria-label', 'close');
+      closeBtn.textContent = '×';
+      closeBtn.style.cssText = 'position:absolute !important; right:12px !important; top:8px !important; background:none !important; border:none !important; color:#aaa !important; font-size:22px !important; cursor:pointer !important;';
+      closeBtn.onclick = function() {
+        if (windowDiv.parentElement) windowDiv.remove();
+        if (overlay.parentElement) overlay.remove();
+      };
+      header.appendChild(closeBtn);
+
+      var content = document.createElement('div');
+      content.style.cssText = 'flex:1 !important; padding:16px !important; color:#bbb !important;';
+      content.textContent = 'Hello from the bottom center!';
+
+      windowDiv.appendChild(header);
+      windowDiv.appendChild(content);
+
+      document.body.appendChild(overlay);
+      document.body.appendChild(windowDiv);
+    });
+  }
 });
 </script>
 <script src="/static/chat.js"></script></body></html>
