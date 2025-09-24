@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>rot.tv5 - blog board</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="/static/styles.css">
+    <style>
+        .blog-body {
+            overflow: hidden;
+        }
+        
+        .blog-posts {
+            position: fixed;
+            top: var(--frame-thickness);
+            left: var(--frame-thickness);
+            right: var(--frame-thickness);
+            bottom: var(--frame-thickness);
+            overflow-y: auto;
+            padding: 20px;
+            font-family: 'Courier New', monospace;
+            /* Hide scrollbar */
+            scrollbar-width: none; /* Firefox */
+            -ms-overflow-style: none; /* Internet Explorer 10+ */
+        }
+        
+        .blog-posts::-webkit-scrollbar {
+            display: none; /* WebKit browsers (Chrome, Safari, Edge) */
+        }
+        
+        .blog-post {
+            text-align: center;
+            margin: 40px auto;
+            max-width: 800px;
+            padding: 30px;
+        }
+        
+        .blog-post-content {
+            color: #eee;
+            font-size: 16px;
+            line-height: 1.6;
+            text-align: left;
+            margin-bottom: 20px;
+        }
+        
+        .blog-post-meta {
+            color: #888;
+            font-size: 14px;
+            text-align: center;
+            padding-top: 15px;
+        }
+        
+        .blog-draft {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #eee;
+            font-size: 16px;
+            line-height: 1.6;
+            text-align: center;
+            z-index: 100;
+            pointer-events: none;
+            max-width: 800px;
+            width: 80%;
+        }
+        
+        .blog-word-counter {
+            position: fixed;
+            bottom: calc(var(--frame-thickness) + 20px);
+            right: calc(var(--frame-thickness) + 20px);
+            color: #888;
+            font-size: 14px;
+            z-index: 110;
+            display: none;
+        }
+        
+        .blog-word-counter.ready {
+            color: #4CAF50;
+        }
+        
+
+        
+        .overlay-input {
+            position: fixed;
+            top: -9999px;
+            left: -9999px;
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .inline-caret {
+            color: #eee;
+            opacity: 1;
+            animation: blink 1s infinite;
+        }
+        
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+    </style>
+</head>
+<body class="blog-body">
+    <!-- Border frames -->
+    <div class="frame-edge frame-top"></div>
+    <div class="frame-edge frame-bottom"></div>
+    <div class="frame-edge frame-left"></div>
+    <div class="frame-edge frame-right"></div>
+    
+    <!-- Navigation buttons -->
+    <div style="position:fixed;left:50%;bottom:0;transform:translate(-50%,0);z-index:90;">
+        <button id="chatBtn" class="neetboard-btn" style="position:absolute;left:100%;bottom:0;margin-left:20px;">chat</button>
+        <button id="neetBoardBtn" class="neetboard-btn" style="position:absolute;left:100%;bottom:0;margin-left:120px;">neet board</button>
+    </div>
+    
+    <!-- Posts container -->
+    <div id="blogPosts" class="blog-posts">
+        <!-- Posts will be added here -->
+    </div>
+    
+    <!-- Draft display when typing (invisible overlay like chat) -->
+    <div id="blogDraft" class="blog-draft">
+        <span id="blogDraftContent"></span><span id="blogCaret" class="inline-caret" style="display:none;">|</span>
+    </div>
+    
+    <!-- Word counter -->
+    <div id="blogWordCounter" class="blog-word-counter">0/200 words</div>
+    
+
+    
+    <!-- Hidden input for typing -->
+    <div id="blogOverlayInput" contenteditable="true" class="overlay-input" spellcheck="false" aria-hidden="true"></div>
+    
+    <script>
+        // Navigation button functionality
+        document.getElementById('chatBtn').addEventListener('click', function() {
+            window.location.href = '/chat';
+        });
+        
+        document.getElementById('neetBoardBtn').addEventListener('click', function() {
+            window.location.href = '/neetboard';
+        });
+        
+        // Blog typing functionality
+        let isTyping = false;
+        let currentText = '';
+        let wordCount = 0;
+        
+        const overlayInput = document.getElementById('blogOverlayInput');
+        const draft = document.getElementById('blogDraft');
+        const draftContent = document.getElementById('blogDraftContent');
+        const wordCounter = document.getElementById('blogWordCounter');
+        const postsContainer = document.getElementById('blogPosts');
+        
+        // Word counting function
+        function countWords(text) {
+            return text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
+        }
+        
+        // Update draft display and word counter
+        function updateDraft() {
+            wordCount = countWords(currentText);
+            
+            // Show text invisibly centered (like chat)
+            draftContent.textContent = currentText || '';
+            document.getElementById('blogCaret').style.display = isTyping ? 'inline' : 'none';
+            
+            // Update word counter with 200 word minimum
+            wordCounter.textContent = `${wordCount}/200 words`;
+            if (wordCount >= 200) {
+                wordCounter.classList.add('ready');
+            } else {
+                wordCounter.classList.remove('ready');
+            }
+        }
+        
+        // Start typing
+        function startTyping() {
+            if (isTyping) return;
+            
+            isTyping = true;
+            currentText = '';
+            wordCount = 0;
+            
+            // Show only word counter (no visible box)
+            wordCounter.style.display = 'block';
+            
+            // Show draft text
+            draft.style.display = 'block';
+            
+            // Scroll existing posts up to make room for draft
+            postsContainer.style.paddingBottom = '400px';
+            postsContainer.scrollTop = postsContainer.scrollHeight;
+            
+            // Focus the hidden input
+            overlayInput.focus();
+            updateDraft();
+        }
+        
+        // Stop typing
+        function stopTyping() {
+            if (!isTyping) return;
+            
+            isTyping = false;
+            
+            // Hide word counter and draft
+            wordCounter.style.display = 'none';
+            draft.style.display = 'none';
+            draftContent.textContent = '';
+            document.getElementById('blogCaret').style.display = 'none';
+            
+            // Remove extra padding to restore normal scroll
+            postsContainer.style.paddingBottom = '20px';
+            
+            // Clear input
+            overlayInput.textContent = '';
+            overlayInput.blur();
+        }
+        
+        // Post the blog entry
+        function postBlog() {
+            // Check 200 word minimum
+            if (wordCount < 200) {
+                return; // Don't post if under 200 words, no popup
+            }
+            
+            // Create post element
+            const postElement = document.createElement('div');
+            postElement.className = 'blog-post';
+            
+            const now = new Date();
+            const timestamp = now.toLocaleDateString() + ' at ' + now.toLocaleTimeString();
+            
+            postElement.innerHTML = `
+                <div class="blog-post-content">${currentText.replace(/\n/g, '<br>')}</div>
+                <div class="blog-post-meta">Posted on ${timestamp}</div>
+            `;
+            
+            // Add to posts container
+            postsContainer.appendChild(postElement);
+            
+            // Scroll to bottom to show new post
+            postsContainer.scrollTop = postsContainer.scrollHeight;
+            
+            // Stop typing
+            stopTyping();
+            
+            // No popup alert - silent posting
+        }
+        
+        // Global keydown handler (like chat)
+        document.addEventListener('keydown', function(e) {
+            if (!isTyping) {
+                // Start typing on any printable key
+                if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+                    startTyping();
+                    currentText = e.key;
+                    updateDraft();
+                }
+                return;
+            }
+            
+            // Handle typing keys
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                postBlog(); // Will only post if 200+ words
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                stopTyping();
+            } else if (e.key === 'Backspace') {
+                e.preventDefault();
+                currentText = currentText.slice(0, -1);
+                updateDraft();
+            } else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+                e.preventDefault();
+                currentText += e.key;
+                updateDraft();
+            }
+        });
+        
+        // Initialize
+        stopTyping();
+    </script>
+</body>
+</html>

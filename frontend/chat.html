@@ -3,6 +3,7 @@
 <div style="position:fixed;left:50%;bottom:0;transform:translate(-50%,0);z-index:90;">
 	<button id="remoteToggle" class="remote-toggle bottom" aria-expanded="false" aria-controls="remotePanel" title="open remote">remote</button>
 			<button id="neetBoardBtn" class="neetboard-btn" style="position:absolute;left:100%;bottom:0;margin-left:72px;">neet board</button>
+			<button id="blogBoardBtn" class="neetboard-btn" style="position:absolute;left:100%;bottom:0;margin-left:172px;">blog board</button>
 </div>
 <div class="frame-edge frame-bottom"></div>
 <div class="frame-edge frame-left"></div>
@@ -75,6 +76,14 @@ document.addEventListener('DOMContentLoaded', function() {
 	if (btn) {
 		btn.addEventListener('click', function() {
 			window.location.href = '/neetboard';
+		});
+	}
+	
+	// Make the blog board button navigate to /blogboard
+	var blogBtn = document.getElementById('blogBoardBtn');
+	if (blogBtn) {
+		blogBtn.addEventListener('click', function() {
+			window.location.href = '/blogboard';
 		});
 	}
 });

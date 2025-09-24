@@ -5,12 +5,50 @@
   <title>neet board</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
+    :root{--frame-thickness:72px;}
     body { background: #000; margin: 0; width: 100vw; height: 100vh; }
+    .frame-edge{position:fixed;pointer-events:none;background:linear-gradient(#151515,#090909);box-shadow:0 0 18px 4px rgba(255,255,255,0.05) inset,0 0 22px 2px rgba(255,255,255,0.04);z-index:40;}
+    .frame-top,.frame-bottom{left:0;width:100%;height:var(--frame-thickness);}
+    .frame-top{top:0;}
+    .frame-bottom{bottom:0;}
+    .frame-left,.frame-right{top:0;height:100%;width:var(--frame-thickness);}
+    .frame-left{left:0;}
+    .frame-right{right:0;}
+    .neetboard-btn {
+      background: #111;
+      border: 1px solid #333;
+      border-bottom: none;
+      border-radius: 10px 10px 0 0;
+      padding: .55rem 0.9rem;
+      color: #eee;
+      cursor: pointer;
+      opacity: 0.78;
+      transition: background .25s,opacity .25s, transform .4s;
+      box-shadow: 0 2px 12px rgba(79,195,247,0.13);
+      margin-left: 0.5rem;
+    }
+    .neetboard-btn:hover {
+      background: #1e1e1e;
+      opacity: 1;
+    }
   </style>
 </head>
 <body>
-  <canvas id="boardCanvas" width="8000" height="8000" style="background:#181818;position:absolute;left:0;top:0;cursor:auto;"></canvas>
-  <div id="onlineCounter" style="position:fixed;top:16px;right:32px;color:#fff;font-family:sans-serif;font-size:20px;z-index:10;text-shadow:0 2px 8px #000,0 0 2px #00e5ff;pointer-events:none;">Online: 1</div>
+  <!-- Border frames -->
+  <div class="frame-edge frame-top"></div>
+  <div class="frame-edge frame-bottom"></div>
+  <div class="frame-edge frame-left"></div>
+  <div class="frame-edge frame-right"></div>
+  
+  <canvas id="boardCanvas" width="8000" height="8000" style="background:#000;position:absolute;left:0;top:0;cursor:auto;"></canvas>
+  <div id="onlineCounter" style="position:fixed;top:32px;right:calc(var(--frame-thickness) + 26px);color:#fff;font-family:sans-serif;font-size:20px;z-index:70;text-shadow:0 2px 8px #000,0 0 2px #00e5ff;pointer-events:none;">Online: 1</div>
+  
+  <!-- Navigation buttons positioned like chat page -->
+  <div style="position:fixed;left:50%;bottom:0;transform:translate(-50%,0);z-index:90;">
+    <button id="chatBtn" class="neetboard-btn" style="position:absolute;left:100%;bottom:0;margin-left:20px;">chat</button>
+    <button id="blogBoardBtn" class="neetboard-btn" style="position:absolute;left:100%;bottom:0;margin-left:120px;">blog board</button>
+  </div>
+  
   <script>
   // Assign a color to each userId (deterministic hash to HSL)
   function colorForUser(id) {
@@ -27,11 +65,41 @@
     localStorage.setItem('neetboard_userid', userId);
   }
   // Multiplayer: connect to backend WebSocket
-  let ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/neetboard');
+  let ws;
+  let reconnectAttempts = 0;
+  let maxReconnectAttempts = 5;
   let onlineCount = 1;
+  
   function updateOnlineCounter() {
     document.getElementById('onlineCounter').textContent = 'Online: ' + onlineCount;
   }
+  
+  function connectWebSocket() {
+    ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/neetboard');
+    
+    ws.onopen = () => {
+      console.log('Neetboard WebSocket connected');
+      reconnectAttempts = 0;
+    };
+    
+    ws.onerror = (error) => {
+      console.error('Neetboard WebSocket error:', error);
+    };
+    
+    ws.onclose = () => {
+      console.log('Neetboard WebSocket disconnected');
+      if (reconnectAttempts < maxReconnectAttempts) {
+        reconnectAttempts++;
+        console.log(`Reconnecting attempt ${reconnectAttempts}/${maxReconnectAttempts}`);
+        setTimeout(connectWebSocket, 2000 * reconnectAttempts);
+      } else {
+        console.log('Max reconnection attempts reached, reloading page');
+        setTimeout(() => location.reload(), 2000);
+      }
+    };
+  }
+  
+  connectWebSocket();
   ws.onmessage = (event) => {
     let msg = JSON.parse(event.data);
     if (msg.type === 'online') {
@@ -82,7 +150,6 @@
       drawBoard();
     }
   };
-  ws.onclose = () => { setTimeout(() => location.reload(), 2000); };
 
   // Helper: broadcast branches to server
   function broadcastBranches() {
@@ -577,6 +644,15 @@
 
     window.addEventListener('resize', drawBoard);
     drawBoard();
+    
+    // Navigation button functionality
+    document.getElementById('chatBtn').addEventListener('click', function() {
+      window.location.href = '/chat';
+    });
+    
+    document.getElementById('blogBoardBtn').addEventListener('click', function() {
+      window.location.href = '/blogboard';
+    });
   </script>
 </body>
 </html>

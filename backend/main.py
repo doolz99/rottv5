@@ -156,6 +156,16 @@ async def broadcast_available_users():
             await ws.send_json(payload)
         except Exception:
             pass
+
+async def broadcast_available_users_to_client(ws: WebSocket):
+    """Send available users to a specific client"""
+    users = get_available_users()
+    payload = {"type": "available_users", "users": [{"id": uid} for uid in users]}
+    print(f"[SEND TO CLIENT] available_users: {[u['id'] for u in payload['users']]}")
+    try:
+        await ws.send_json(payload)
+    except Exception:
+        pass
 waiting_random: deque[str] = deque()
 waiting_tagged: List[Tuple[str, Set[str]]] = []  # (user_id, tags)
 active_chats: Dict[str, Dict] = {}
@@ -315,13 +325,62 @@ async def disconnect_user(user_id: str, notify_partner: bool = True):
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
-    user_id = str(uuid.uuid4())
+    user_id = None
+    
+    # Wait for either register_user message or use generated ID as fallback
+    try:
+        # Try to receive initial message within 5 seconds
+        import asyncio
+        initial_data = await asyncio.wait_for(ws.receive_json(), timeout=5.0)
+        if initial_data.get("type") == "register_user" and initial_data.get("userId"):
+            user_id = initial_data["userId"]
+        else:
+            # If not a register_user message, we'll need to handle it later
+            user_id = str(uuid.uuid4())
+            # Put the message back in the queue by handling it after setup
+            pending_message = initial_data
+    except (asyncio.TimeoutError, Exception):
+        # Fallback to generated ID if no message received or error
+        user_id = str(uuid.uuid4())
+        pending_message = None
+    
+    if not user_id:
+        user_id = str(uuid.uuid4())
+        
     user_ws[user_id] = ws
     user_chat[user_id] = None
     await ws.send_json({"type": "welcome", "userId": user_id})
     # Immediately broadcast new population
     await broadcast_population()
     await broadcast_available_users()
+    
+    # Handle pending message if there was one that wasn't register_user
+    if 'pending_message' in locals() and pending_message:
+        # Process this message in the main loop
+        data = pending_message
+        msg_type = data.get("type")
+        # Handle the message here (duplicate the logic from below)
+        if msg_type == 'join':
+            user_mode[user_id] = 'random'
+            existing_chat = user_chat.get(user_id)
+            if existing_chat:
+                chat = active_chats.get(existing_chat)
+                if chat:
+                    partner = chat['a'] if chat['b'] == user_id else chat['b']
+                    pws = user_ws.get(partner)
+                    if pws:
+                        await pws.send_json({"type": "partner_disconnected"})
+                    user_chat[partner] = None
+                    active_chats.pop(existing_chat, None)
+                user_chat[user_id] = None
+            await leave_queue(user_id)
+            async with PAIR_LOCK:
+                await pair_user(user_id)
+            await ws.send_json({"type": "queue_status", "status": "in_chat" if user_chat[user_id] else "waiting"})
+            await broadcast_tag_counts()
+            await broadcast_available_users()
+            await broadcast_population()
+    
     try:
         while True:
             data = await ws.receive_json()
@@ -380,6 +439,17 @@ async def websocket_endpoint(ws: WebSocket):
                 await broadcast_tag_counts()
                 await broadcast_available_users()
                 await broadcast_population()
+
+            elif msg_type == 'register_user':
+                # Handle late register_user messages (should be rare due to initial handling)
+                provided_user_id = data.get('userId')
+                if provided_user_id and provided_user_id != user_id:
+                    # User is trying to change their ID after connection - ignore for security
+                    pass
+
+            elif msg_type == 'request_available_users':
+                # Send current available users to this client
+                await broadcast_available_users_to_client(ws)
 
             elif msg_type == 'skip':
                 # Disconnect from current chat but stay in same mode and immediately requeue
@@ -554,3 +624,8 @@ async def chat_page():
 @app.get("/neetboard", response_class=HTMLResponse)
 async def neetboard_page():
     return _page('neetboard.html')
+
+# Serve blogboard.html at /blogboard
+@app.get("/blogboard", response_class=HTMLResponse)
+async def blogboard_page():
+    return _page('blogboard.html')

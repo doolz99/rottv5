@@ -172,7 +172,15 @@ if (isMobileDevice()) {
 }
 const wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
 let ws;
-let userId=null; let chatId=null;
+
+// Persistent user identity (like neetboard)
+let userId = localStorage.getItem('chat_userid');
+if (!userId) {
+  userId = 'u_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+  localStorage.setItem('chat_userid', userId);
+}
+
+let chatId=null;
 let mode = sessionStorage.getItem('mode')||'random';
 let tags = [];
 try{ if(mode==='tags'){ tags = JSON.parse(sessionStorage.getItem('tags')||'[]'); } }catch(e){}
@@ -340,7 +348,22 @@ function connect(){
   if(ws && (ws.readyState===0 || ws.readyState===1)) return; // already connecting/connected
   ws = new WebSocket(wsUrl);
   ws.onopen = ()=>{
+    // Send persistent userId immediately upon connection
+    if (userId) {
+      ws.send(JSON.stringify({
+        type: 'register_user',
+        userId: userId
+      }));
+    }
     setStatus('idle');
+    // Request current user list to ensure proper initial sync
+    setTimeout(() => {
+      if (ws && ws.readyState === 1) {
+        ws.send(JSON.stringify({
+          type: 'request_available_users'
+        }));
+      }
+    }, 100);
   };
   ws.onmessage = (ev)=>{
     const data = JSON.parse(ev.data);
