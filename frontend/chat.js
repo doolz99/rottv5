@@ -475,28 +475,26 @@ function connect(){
     }
   };
 
-// Function to update red dot color based on partner's window status
+// Function to show/hide X indicator based on partner's window status
 function updateRedDotStatus(partnerHasWindowOpen) {
   console.log('[DEBUG] updateRedDotStatus called with:', partnerHasWindowOpen);
-  const redDot = document.getElementById('redDot');
-  console.log('[DEBUG] redDot element found:', redDot);
-  if (redDot) {
+  const xIndicator = document.getElementById('partnerViewingX');
+  console.log('[DEBUG] X indicator element found:', xIndicator);
+  if (xIndicator) {
     // Play unique beeping sound for window status change
     SOUND.windowStatus();
     
     if (partnerHasWindowOpen) {
-      // Partner has window open - change to orange/yellow
-      redDot.style.setProperty('background', '#ffaa00', 'important');
-      redDot.style.setProperty('box-shadow', '0 0 10px rgba(255, 170, 0, 0.8)', 'important');
-      console.log('[CHAT] Red dot changed to orange - partner viewing window');
+      // Partner has window open - show X
+      xIndicator.style.setProperty('display', 'block', 'important');
+      console.log('[CHAT] X indicator shown - partner viewing window');
     } else {
-      // Partner closed window - back to red
-      redDot.style.setProperty('background', '#ff3333', 'important');
-      redDot.style.setProperty('box-shadow', '0 0 10px rgba(255, 51, 51, 0.8)', 'important');
-      console.log('[CHAT] Red dot back to red - partner closed window');
+      // Partner closed window - hide X
+      xIndicator.style.setProperty('display', 'none', 'important');
+      console.log('[CHAT] X indicator hidden - partner closed window');
     }
   } else {
-    console.log('[DEBUG] Red dot element not found!');
+    console.log('[DEBUG] X indicator element not found!');
   }
 }
 
