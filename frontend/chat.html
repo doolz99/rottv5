@@ -22,14 +22,16 @@
     existingOverlay.remove();
     // Send WebSocket message that window is closed
     if (typeof window.ws !== 'undefined' && window.ws.readyState === WebSocket.OPEN) {
-      window.window.ws.send(JSON.stringify({type: 'window_status', status: 'closed'}));
+      console.log('Sending window_status: closed');
+      window.ws.send(JSON.stringify({type: 'window_status', status: 'closed'}));
     }
     return;
   }
   
   // Send WebSocket message that window is opened
   if (typeof window.ws !== 'undefined' && window.ws.readyState === WebSocket.OPEN) {
-    window.window.ws.send(JSON.stringify({type: 'window_status', status: 'opened'}));
+    console.log('Sending window_status: opened');
+    window.ws.send(JSON.stringify({type: 'window_status', status: 'opened'}));
   }
   
   // Create overlay to dim chat
