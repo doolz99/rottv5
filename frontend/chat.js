@@ -170,7 +170,8 @@ if (isMobileDevice()) {
   // Optionally, stop further JS execution for chat
   throw new Error('Blocked on mobile');
 }
-const wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
+// Force ws:// for all connections since we redirect HTTPS to HTTP anyway
+const wsUrl = 'ws://' + location.host + '/ws';
 let ws;
 
 // Persistent user identity with tab support for same-device testing
